@@ -34,6 +34,21 @@ ln -sfn /Users/pio/.DataAnalysis .venv
 
 그 다음 Antigravity에서 interpreter를 `.venv/bin/python`으로 선택하면 됩니다.
 
+## Kaggle Credentials
+
+Kaggle 인증값은 repo에 직접 넣지 않습니다. 로컬에서는 `.env.example`을 `.env`로 복사한 뒤 본인 계정 값을 채우고, `a.ipynb`를 실행하면 `~/.kaggle/kaggle.json`이 생성됩니다.
+
+```bash
+cp .env.example .env
+```
+
+```text
+KAGGLE_USERNAME=your_kaggle_username
+KAGGLE_KEY=your_kaggle_api_key
+```
+
+`.env`와 `kaggle.json`은 `.gitignore`에 포함되어 커밋되지 않습니다.
+
 ## Data Layout
 
 프로젝트 루트에 아래 구조가 있어야 합니다.
