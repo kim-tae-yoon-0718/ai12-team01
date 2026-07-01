@@ -216,3 +216,48 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project-local notebooks / scratch
+a.ipynb
+scratch*.ipynb
+
+# Project data and generated artifacts
+sprint_ai_project1_data/
+working/
+data/
+dataset/
+datasets/
+ai12-level1-project.zip
+
+# Model outputs / checkpoints
+*.pth
+*.pt
+*.onnx
+*.engine
+*.ckpt
+*.safetensors
+*.bin
+*.pdparams
+runs/
+output/
+outputs/
+checkpoints/
+wandb/
+lightning_logs/
+summary/
+events.out.tfevents*
+
+# Competition outputs
+submission.csv
+submission*.csv
+submissions/
+
+# Archives / downloaded bundles
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# Local editor/cache
+.vscode/
+.matplotlib-cache/
