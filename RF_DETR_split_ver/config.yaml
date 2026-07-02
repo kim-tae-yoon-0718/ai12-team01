@@ -17,6 +17,7 @@ model:
   tag: small_res512     # 실험명 태그 (체크포인트 파일명에 사용)
 
 train:
+  seed: 42              # model.train(seed=...)로 전달 - RF-DETR 학습 재현성 고정 (TrainConfig.seed 확인됨)
   epochs: 100
   batch_size: 8
   grad_accum_steps: 2
@@ -33,6 +34,5 @@ train:
 
 output:
   local_output_dir: /content/outputs   # fold별 학습 임시 산출물 (Colab 로컬)
-  # best 체크포인트 백업 위치. prepare_data() 실행 시 콘솔에 PROJ_ROOT/outputs 예시가
-  # 출력되니, 확인 후 실제 경로로 채워넣을 것.
+  # best 체크포인트 백업 위치. prepare_data() 실행 시 콘솔에 PROJ_ROOT/outputs 예시가 출력되니, 확인 후 실제 경로로 채워넣을 것.
   backup_dir: /content/drive/MyDrive/ai12-level1-project/outputs
