@@ -11,7 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from model import get_rfdetr_model
-from visualize import collect_predictions_from_coco, evaluate_from_data, visualize_errors
+from visualize import collect_predictions_from_coco, evaluate_from_data, visualize_errors_from_data
 
 
 def read_metrics_csv(output_dir, use_ema=False):
@@ -121,8 +121,9 @@ def report_fold_result(fold_idx, checkpoint_path, model_variant, dataset_dir,
     클래스별 AP는 fold마다 콘솔에 출력하지 않고 반환값에만 담아둡니다 — 전체 fold가
     끝난 뒤 summarize_per_class()로 한 번에 집계해서 보는 쪽으로 통일했습니다.
 
-    mAP 계산(collect_predictions_from_coco 1회)과 오답 시각화(visualize_errors 원스텝 래퍼 내부에서 collect_predictions_from_coco 재호출)가 분리되어 있어 추론이 2번 수행됩니다. 
-    fold당 1회씩만 실행되니 비용 부담은 작고, 코드를 단순하게 유지하기 위한 선택입니다.
+    collect_predictions_from_coco()로 추론을 1회만 수행하고, 그 결과(pred_data)를
+    mAP 계산(evaluate_from_data)과 오답 시각화(visualize_errors_from_data) 양쪽에
+    재사용해서 추론 중복을 피합니다.
 
     Args:
         fold_idx (int): fold 번호 (0-indexed)
@@ -145,9 +146,9 @@ def report_fold_result(fold_idx, checkpoint_path, model_variant, dataset_dir,
     pred_data = collect_predictions_from_coco(model, coco_json_path, valid_dir, score_threshold=0.0)
     metrics = evaluate_from_data(pred_data)
 
-    visualize_errors(model, coco_json_path, valid_dir, label_to_category_id, vis_dir,
-                      score_threshold=score_threshold, iou_threshold=iou_threshold,
-                      file_prefix=f'fold{fold_idx}_error')
+    visualize_errors_from_data(pred_data, label_to_category_id, vis_dir,
+                                score_threshold=score_threshold, iou_threshold=iou_threshold,
+                                file_prefix=f'fold{fold_idx}_error')
 
     return metrics
 
