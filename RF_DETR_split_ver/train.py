@@ -1,5 +1,8 @@
 # rf-detr/train.py
-"""RF-DETR 5-fold 학습 루프. 원본 rfdetr_train_5fold_colab.py의 [3] 블록을 함수로 분리한 것."""
+"""
+RF-DETR 5-fold 학습 루프. 
+원본 rfdetr_train_5fold_colab.py의 [3] 블록을 함수로 분리하였습니다.
+"""
 import os
 import shutil
 
@@ -7,6 +10,8 @@ import yaml
 import torch
 
 from model import get_rfdetr_model
+from dataset import load_label_map
+from utils import read_metrics_csv, plot_history, report_fold_result, summarize_kfold_results
 
 
 def load_config(path):
@@ -72,15 +77,23 @@ def train_fold(fold_idx, dataset_dir, model_variant, model_tag, train_cfg,
         dst = None
         print(f'[fold {fold_idx}] checkpoint_best_total.pth 없음 — 백업 실패')
 
+    metrics_csv = os.path.join(out, 'metrics.csv')
+    if os.path.exists(metrics_csv):
+        history = read_metrics_csv(out)
+        plot_history(history, title=f'{model_tag} - Fold {fold_idx}',
+                     save_path=os.path.join(backup_dir, f'{exp}_history.png'))
+    else:
+        print(f'[fold {fold_idx}] metrics.csv 없음 — 학습 곡선 생략')
+
     del model
     torch.cuda.empty_cache()
-    print(f'[fold {fold_idx}] 완료')
     return dst
 
 
 def run_kfold(config, max_folds=None):
     """
-    config에 정의된 n_splits만큼 fold를 순회하며 train_fold를 실행합니다.
+    config에 정의된 n_splits만큼 fold를 순회하며 train_fold를 실행하고,
+    fold마다 report_fold_result()(클래스별 mAP 출력 + 오답 시각화)를 자동으로 돌린 뒤 마지막에 summarize_kfold_results()로 5-fold 평균±표준편차를 출력합니다.
 
     Args:
         config (dict): load_config()의 반환값
@@ -93,8 +106,10 @@ def run_kfold(config, max_folds=None):
 
     data_cfg = config['data']
     n_folds = max_folds if max_folds is not None else data_cfg['n_splits']
+    label_to_category_id = load_label_map(data_cfg['dataset_dir'])['label2cat']
 
     results = []
+    fold_metrics = []
     for fi in range(n_folds):
         dst = train_fold(
             fold_idx=fi,
@@ -106,6 +121,25 @@ def run_kfold(config, max_folds=None):
             backup_dir=config['output']['backup_dir'],
         )
         results.append(dst)
+
+        if dst is None:
+            print(f'[fold {fi}] 체크포인트 없음 — 리포팅 생략')
+            continue
+
+        vis_dir = os.path.join(config['output']['backup_dir'], f"{config['model']['tag']}_fold{fi}_errors")
+        metrics = report_fold_result(
+            fold_idx=fi,
+            checkpoint_path=dst,
+            model_variant=config['model']['variant'],
+            dataset_dir=data_cfg['dataset_dir'],
+            label_to_category_id=label_to_category_id,
+            vis_dir=vis_dir,
+        )
+        fold_metrics.append(metrics)
+        print(f"[fold {fi}] 완료 | Best mAP@0.75:0.95: {metrics['map_75_95']:.4f}")
+
+    if fold_metrics:
+        summarize_kfold_results(fold_metrics, config['model']['tag'])
 
     print(f'\n▶ {n_folds}폴드 학습 완료')
     return results
