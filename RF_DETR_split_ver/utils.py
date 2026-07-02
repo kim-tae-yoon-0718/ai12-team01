@@ -81,20 +81,13 @@ def plot_history(history, title='Training History', save_path=None):
     plt.show()
 
 
-def print_per_class_map(metrics, label_to_category_id):
-    """클래스별 mAP를 출력합니다 (src/train.py의 run_kfold() 콘솔 출력 로직과 동일)."""
-    for cls, ap in zip(metrics['classes'], metrics['map_per_class']):
-        label = cls.item() if hasattr(cls, 'item') else int(cls)
-        cat_id = label_to_category_id.get(label, '?')
-        ap_val = ap.item() if hasattr(ap, 'item') else float(ap)
-        print(f'  category {cat_id}: {ap_val:.4f}')
-
-
 def report_fold_result(fold_idx, checkpoint_path, model_variant, dataset_dir,
                         label_to_category_id, vis_dir, score_threshold=0.5, iou_threshold=0.5):
     """
-    fold 하나에 대해 mAP 계산 + 클래스별 mAP 출력 + 오답 이미지 시각화를 자동으로 수행합니다.
+    fold 하나에 대해 mAP 계산(클래스별 포함) + 오답 이미지 시각화를 자동으로 수행합니다.
     train.run_kfold()의 fold 루프 안에서 각 fold 학습 직후 호출됩니다.
+    클래스별 AP는 fold마다 콘솔에 출력하지 않고 반환값에만 담아둡니다 — 전체 fold가
+    끝난 뒤 summarize_per_class()로 한 번에 집계해서 보는 쪽으로 통일했습니다.
 
     mAP 계산(collect_predictions_from_coco 1회)과 오답 시각화(visualize_errors 원스텝 래퍼 내부에서 collect_predictions_from_coco 재호출)가 분리되어 있어 추론이 2번 수행됩니다. 
     fold당 1회씩만 실행되니 비용 부담은 작고, 코드를 단순하게 유지하기 위한 선택입니다.
@@ -119,9 +112,6 @@ def report_fold_result(fold_idx, checkpoint_path, model_variant, dataset_dir,
 
     pred_data = collect_predictions_from_coco(model, coco_json_path, valid_dir, score_threshold=0.0)
     metrics = evaluate_from_data(pred_data)
-
-    print(f'\n[Fold {fold_idx}] 클래스별 mAP')
-    print_per_class_map(metrics, label_to_category_id)
 
     visualize_errors(model, coco_json_path, valid_dir, label_to_category_id, vis_dir,
                       score_threshold=score_threshold, iou_threshold=iou_threshold,
@@ -154,3 +144,43 @@ def summarize_kfold_results(fold_metrics, model_tag):
           f"mAP@0.75:0.95: {strict_mean:.4f} ± {strict_std:.4f}\n{'='*50}")
 
     return {'map': (map_mean, map_std), 'map_50': (map50_mean, map50_std), 'map_75_95': (strict_mean, strict_std)}
+
+
+def summarize_per_class(fold_metrics, label_to_category_id, label_counts):
+    """
+    fold별 evaluate_from_data() 결과(classes/map_per_class)를 폴드 전체에 걸쳐 집계해,
+    클래스별 mAP를 mean_AP 내림차순 DataFrame으로 정리합니다.
+
+    Args:
+        fold_metrics (list): report_fold_result()가 fold마다 반환한 dict 리스트
+        label_to_category_id (dict): 모델 라벨 -> 원본 category_id 매핑
+        label_counts (dict): {label: 전체 데이터 등장 횟수} (dataset.compute_label_counts() 참고)
+
+    Returns:
+        pd.DataFrame: columns = [label, category_id, total_count, mean_AP, std_AP, valid_folds],
+                       mean_AP 내림차순 정렬
+    """
+    per_class = [
+        {
+            (cls.item() if hasattr(cls, 'item') else int(cls)):
+                (ap.item() if hasattr(ap, 'item') else float(ap))
+            for cls, ap in zip(m['classes'], m['map_per_class'])
+        }
+        for m in fold_metrics
+    ]
+
+    all_labels = sorted(set(label for d in per_class for label in d))
+    rows = []
+    for label in all_labels:
+        aps = [d.get(label, -1) for d in per_class]
+        valid = [ap for ap in aps if ap >= 0]   # -1(해당 fold에 GT 없음) 제외
+        rows.append({
+            'label': label,
+            'category_id': label_to_category_id.get(label, '?'),
+            'total_count': label_counts.get(label, 0),
+            'mean_AP': round(np.mean(valid), 4) if valid else -1,
+            'std_AP': round(np.std(valid), 4) if valid else 0,
+            'valid_folds': len(valid),
+        })
+
+    return pd.DataFrame(rows).sort_values('mean_AP', ascending=False)
