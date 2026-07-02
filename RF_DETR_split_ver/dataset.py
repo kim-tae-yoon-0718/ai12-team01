@@ -240,6 +240,17 @@ def save_label_map(cat2label, label2cat, output_dir):
     return path
 
 
+def load_label_map(output_dir):
+    """save_label_map()이 저장한 label_map.json을 읽어옵니다 (정수 키로 역직렬화)."""
+    path = os.path.join(output_dir, 'label_map.json')
+    with open(path, 'r', encoding='utf-8') as f:
+        label_map = json.load(f)
+    return {
+        'cat2label': {int(k): v for k, v in label_map['cat2label'].items()},
+        'label2cat': {int(k): v for k, v in label_map['label2cat'].items()},
+    }
+
+
 def archive_dataset(output_dir, archive_base_path):
     """
     output_dir 전체를 zip으로 묶습니다.
