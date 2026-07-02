@@ -3,6 +3,8 @@
 학습 곡선(history) 구성, fold별/5-fold 리포팅 자동화.
 """
 import os
+import glob
+import math
 
 import numpy as np
 import pandas as pd
@@ -78,6 +80,36 @@ def plot_history(history, title='Training History', save_path=None):
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path)
+    plt.show()
+
+
+def show_error_gallery(vis_dir, ncols=4, figsize_per_image=4):
+    """
+    visualize_errors()가 vis_dir에 저장해둔 오답 이미지들을 한 셀에서
+    grid(subplot) 형태로 한 번에 확인합니다. (이미지 재계산 없이 저장된 PNG만 읽음)
+
+    Args:
+        vis_dir (str): 오답 이미지가 저장된 폴더 (report_fold_result() 호출 시 넘긴 vis_dir)
+        ncols (int): 한 줄에 표시할 이미지 수
+        figsize_per_image (float): 이미지 한 장당 figure 크기(inch) 기준
+    """
+    paths = sorted(glob.glob(os.path.join(vis_dir, '*.png')))
+    if not paths:
+        print(f'{vis_dir}에 이미지 없음')
+        return
+
+    nrows = math.ceil(len(paths) / ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(figsize_per_image * ncols, figsize_per_image * nrows))
+    axes = np.atleast_1d(axes).reshape(-1)
+
+    for ax, path in zip(axes, paths):
+        ax.imshow(plt.imread(path))
+        ax.set_title(os.path.basename(path), fontsize=7)
+        ax.axis('off')
+    for ax in axes[len(paths):]:
+        ax.axis('off')
+
+    plt.tight_layout()
     plt.show()
 
 
