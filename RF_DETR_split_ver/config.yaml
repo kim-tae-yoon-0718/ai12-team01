@@ -17,7 +17,6 @@ model:
   tag: small_res512     # 실험명 태그 (체크포인트 파일명에 사용)
 
 train:
-  seed: 42              # model.train(seed=...)로 전달 - RF-DETR 학습 재현성 고정 (TrainConfig.seed 확인됨)
   epochs: 100
   batch_size: 8
   grad_accum_steps: 2
