@@ -8,6 +8,7 @@ import math
 
 import numpy as np
 import pandas as pd
+import torch
 import matplotlib.pyplot as plt
 
 from model import get_rfdetr_model
@@ -118,12 +119,17 @@ def report_fold_result(fold_idx, checkpoint_path, model_variant, dataset_dir,
     """
     fold 하나에 대해 mAP 계산(클래스별 포함) + 오답 이미지 시각화를 자동으로 수행합니다.
     train.run_kfold()의 fold 루프 안에서 각 fold 학습 직후 호출됩니다.
-    클래스별 AP는 fold마다 콘솔에 출력하지 않고 반환값에만 담아둡니다 — 전체 fold가
-    끝난 뒤 summarize_per_class()로 한 번에 집계해서 보는 쪽으로 통일했습니다.
+    클래스별 AP는 fold마다 콘솔에 출력하지 않고 반환값에만 담아둡니다 
+    — 전체 fold가 끝난 뒤 summarize_per_class()로 한 번에 집계해서 보는 쪽으로 통일했습니다.
 
     collect_predictions_from_coco()로 추론을 1회만 수행하고, 그 결과(pred_data)를
     mAP 계산(evaluate_from_data)과 오답 시각화(visualize_errors_from_data) 양쪽에
     재사용해서 추론 중복을 피합니다.
+
+    collect_predictions_from_coco()는 score_threshold=0.0으로 모든 예측을 걸러내지 않고 가져오는데, 
+    여기엔 RF-DETR의 배경/no-object 클래스(0)나 학습에 쓰인 
+    실제 카테고리 범위를 벗어난 내부 예약 클래스까지 섞여 나올 수 있습니다.
+    이런 라벨은 label_to_category_id에 없으므로, mAP/오답 시각화에 넘기기 전에 걸러냅니다.
 
     Args:
         fold_idx (int): fold 번호 (0-indexed)
@@ -144,6 +150,14 @@ def report_fold_result(fold_idx, checkpoint_path, model_variant, dataset_dir,
     model = get_rfdetr_model(model_variant, checkpoint_path=checkpoint_path)
 
     pred_data = collect_predictions_from_coco(model, coco_json_path, valid_dir, score_threshold=0.0)
+
+    valid_labels = set(label_to_category_id.keys())
+    for d in pred_data:
+        keep = torch.tensor([lbl.item() in valid_labels for lbl in d['pred_labels']], dtype=torch.bool)
+        d['pred_boxes'] = d['pred_boxes'][keep]
+        d['pred_labels'] = d['pred_labels'][keep]
+        d['pred_scores'] = d['pred_scores'][keep]
+
     metrics = evaluate_from_data(pred_data)
 
     visualize_errors_from_data(pred_data, label_to_category_id, vis_dir,
