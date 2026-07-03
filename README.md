@@ -87,6 +87,7 @@ cd RF_DETR_split_ver
 python prepare_74_hidden45_dataset.py \
   --base56-dir /path/to/train_56_45_merged_coco \
   --hidden18-dir /path/to/hidden_train_import \
+  --test-images-dir /path/to/original/test_images \
   --out-dir /path/to/rfdetr_dataset_74_hidden45
 
 python train_74_hidden45.py --config config_74_hidden45.yaml --dry-run
@@ -94,6 +95,7 @@ python train_74_hidden45.py --config config_74_hidden45.yaml
 ```
 
 - `prepare_74_hidden45_dataset.py`는 COCO `category_id`를 프로젝트 제출/평가 기준인 K-code 숫자로 둡니다. 예: `K-001900 -> 1900`.
+- `test` split은 기본적으로 다운로드한 원본 테스트 이미지 폴더를 그대로 사용합니다. test annotation은 비공개이므로 `_annotations.coco.json`의 `annotations`는 빈 배열입니다.
 - RF-DETR은 custom COCO dataset을 읽을 때 sparse K-code id를 내부 0-based label로 remap합니다. 출력 dataset의 `category_mapping.csv`에서 K-code, 내부 label, N번호, 약품명, 각인, hidden 후보 상태를 함께 확인할 수 있습니다.
 - `config_74_hidden45.yaml` 기본값은 로컬 MPS smoke test용입니다. CUDA/Colab에서는 `train.device: cuda`, `output.*`, `data.*` 경로를 환경에 맞게 바꾸세요.
 

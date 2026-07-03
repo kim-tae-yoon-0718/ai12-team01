@@ -27,6 +27,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from PIL import Image
+
 
 DEFAULT_BASE56 = Path(
     "/Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/aihub_prepared/train_56_45_merged_coco"
@@ -37,10 +39,14 @@ DEFAULT_HIDDEN18 = Path(
 DEFAULT_OUT = Path(
     "/Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/rfdetr_dataset_74_hidden45"
 )
+DEFAULT_TEST_IMAGES = Path(
+    "/Users/pio/Documents/AIENGINEERCOURSE/detectionproject/sprint_ai_project1_data/test_images"
+)
 
 
 N_RE = re.compile(r"^N(\d{2})$")
 K_RE = re.compile(r"K-(\d+)")
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,12 +54,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base56-dir", type=Path, default=DEFAULT_BASE56)
     parser.add_argument("--hidden18-dir", type=Path, default=DEFAULT_HIDDEN18)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--test-images-dir", type=Path, default=DEFAULT_TEST_IMAGES)
     parser.add_argument("--link-mode", choices=["symlink", "hardlink", "copy"], default="symlink")
     parser.add_argument(
         "--test-from",
-        choices=["valid", "empty"],
-        default="valid",
-        help="Use the combined valid split as RF-DETR test by default.",
+        choices=["original", "valid", "empty"],
+        default="original",
+        help="Use original downloaded test images by default. No test annotations are created.",
     )
     return parser.parse_args()
 
@@ -83,6 +90,18 @@ def place_file(src: Path, dst: Path, mode: str) -> None:
         os.link(src, dst)
     else:
         dst.symlink_to(src)
+
+
+def natural_image_key(path: Path) -> tuple[int, int | str]:
+    if path.stem.isdigit():
+        return (0, int(path.stem))
+    return (1, path.name)
+
+
+def image_id_from_name(path: Path, fallback: int) -> int:
+    if path.stem.isdigit():
+        return int(path.stem)
+    return fallback
 
 
 def parse_n_number(value: str) -> int:
@@ -332,6 +351,63 @@ def write_empty_test(out_dir: Path, categories: list[dict[str, Any]]) -> dict[st
     return {"split": "test", "source_split": "empty", "images": 0, "annotations": 0, "categories": len(categories)}
 
 
+def write_original_test(test_images_dir: Path, out_dir: Path, categories: list[dict[str, Any]], link_mode: str) -> dict[str, Any]:
+    if not test_images_dir.exists():
+        raise FileNotFoundError(test_images_dir)
+    test_dir = out_dir / "test"
+    test_dir.mkdir(parents=True, exist_ok=True)
+
+    image_paths = sorted(
+        [path for path in test_images_dir.iterdir() if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS],
+        key=natural_image_key,
+    )
+    if not image_paths:
+        raise FileNotFoundError(f"No test images found in {test_images_dir}")
+
+    images: list[dict[str, Any]] = []
+    used_ids: set[int] = set()
+    for index, image_path in enumerate(image_paths, start=1):
+        image_id = image_id_from_name(image_path, index)
+        if image_id in used_ids:
+            raise ValueError(f"Duplicate test image id {image_id} from {image_path}")
+        used_ids.add(image_id)
+
+        with Image.open(image_path) as image:
+            width, height = image.size
+        place_file(image_path, test_dir / image_path.name, link_mode)
+        images.append(
+            {
+                "id": image_id,
+                "file_name": image_path.name,
+                "width": width,
+                "height": height,
+                "source_dataset": "original_test",
+                "source_file_name": image_path.name,
+            }
+        )
+
+    payload = {
+        "info": {
+            "description": "Original downloaded competition test images for RF-DETR inference",
+            "test_images_dir": str(test_images_dir),
+            "category_id_semantics": "COCO category_id is the numeric K-code. Test annotations are intentionally empty.",
+        },
+        "licenses": [],
+        "images": images,
+        "annotations": [],
+        "categories": categories,
+    }
+    write_json(test_dir / "_annotations.coco.json", payload)
+    return {
+        "split": "test",
+        "source_split": "original_test",
+        "images": len(images),
+        "annotations": 0,
+        "categories": len(categories),
+        "test_images_dir": str(test_images_dir),
+    }
+
+
 def write_category_table(out_dir: Path, categories: list[dict[str, Any]]) -> None:
     rows = []
     for internal_label, category in enumerate(sorted(categories, key=lambda item: int(item["id"]))):
@@ -373,6 +449,7 @@ def main() -> None:
     summary = {
         "base56_dir": str(args.base56_dir),
         "hidden18_dir": str(args.hidden18_dir),
+        "test_images_dir": str(args.test_images_dir),
         "out_dir": str(args.out_dir),
         "link_mode": args.link_mode,
         "class_count": len(categories),
@@ -402,7 +479,9 @@ def main() -> None:
             ),
         ],
     }
-    if args.test_from == "valid":
+    if args.test_from == "original":
+        summary["splits"].append(write_original_test(args.test_images_dir, args.out_dir, categories, args.link_mode))
+    elif args.test_from == "valid":
         summary["splits"].append(
             convert_split(
                 base56_dir=args.base56_dir,

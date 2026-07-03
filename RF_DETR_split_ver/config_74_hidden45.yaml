@@ -8,6 +8,8 @@ data:
   base56_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/aihub_prepared/train_56_45_merged_coco
   # Hidden N57-N74 crop export. Crop training avoids unlabeled neighboring pills.
   hidden18_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/aihub_prepared/hidden_train_import
+  # Original downloaded competition test images. Used for inference-only test split.
+  test_images_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/sprint_ai_project1_data/test_images
 
 model:
   variant: nano          # nano | small | medium | base | large
