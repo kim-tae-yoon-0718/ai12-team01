@@ -1,0 +1,32 @@
+# RF-DETR config for the 56-class 45-fill merged COCO dataset.
+
+data:
+  # Output from prepare_45fill_dataset.py. Must contain train/valid/test dirs.
+  dataset_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/rfdetr_dataset_45fill
+  # Source merged COCO dataset made by detectionproject tooling.
+  merged_coco_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/aihub_prepared/train_56_45_merged_coco
+
+model:
+  variant: nano          # nano | small | medium | base | large
+  tag: nano_45fill_mps
+
+train:
+  epochs: 1              # smoke-test default; raise for real training
+  batch_size: 1
+  grad_accum_steps: 16
+  lr: 0.0001
+  lr_encoder: 0.00015
+  weight_decay: 0.0001
+  lr_scheduler: cosine
+  warmup_epochs: 0.0
+  lr_min_factor: 0.0
+  early_stopping: true
+  early_stopping_patience: 10
+  early_stopping_min_delta: 0.001
+  tensorboard: true
+  resolution: 384        # RF-DETR-N smoke-test resolution
+  device: mps            # cuda | mps | cpu
+
+output:
+  local_output_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/rfdetr_outputs
+  backup_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/rfdetr_outputs/best

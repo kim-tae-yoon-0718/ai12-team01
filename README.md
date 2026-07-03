@@ -58,6 +58,25 @@ run_kfold(config)
 - 데이터 경로는 하드코딩하지 않고, `config.yaml`의 `data.data_root_candidates`(우선 탐색 후보) / `data.search_root`(재귀 검색 루트)를 기준으로 `dataset.find_data_root()`가 자동으로 찾습니다. 팀원마다 Drive 폴더 구조(`1팀 공유 문서` 하위 여부 등)가 달라도 동작합니다.
 - zip 백업/복원 위치가 사람마다 다르면 `prepare_data(config, archive_dir=...)` / `restore_data(config, archive_dir=...)`처럼 인자로 직접 지정할 수 있습니다.
 
+### 56종 45-fill merged COCO로 RF-DETR 단일 학습
+
+`detectionproject`에서 만든 56-class 45-fill merged COCO는 RF-DETR 표준 디렉토리 구조로 변환한 뒤 단일 train/valid split으로 학습할 수 있습니다.
+
+```bash
+cd RF_DETR_split_ver
+
+python prepare_45fill_dataset.py \
+  --source-dir /path/to/train_56_45_merged_coco \
+  --out-dir /path/to/rfdetr_dataset_45fill
+
+python train_45fill.py --config config_45fill.yaml --dry-run
+python train_45fill.py --config config_45fill.yaml
+```
+
+- `prepare_45fill_dataset.py`는 원본 contiguous category id `0..55`를 RF-DETR용 `1..56`으로 이동하고, `id=0` dummy category를 추가합니다.
+- 기본 `link-mode`는 `symlink`라 이미지 중복 복사를 피합니다. Colab/Drive에 업로드할 실파일 dataset이 필요하면 `--link-mode copy`를 쓰세요.
+- `config_45fill.yaml`의 기본값은 로컬 MPS smoke test용입니다. CUDA/Colab에서는 `train.device: cuda`, `output.*`, `data.*` 경로를 환경에 맞게 바꾸세요.
+
 ---
 
 ## Annotation 수정 내역
