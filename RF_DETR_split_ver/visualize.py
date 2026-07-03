@@ -404,6 +404,8 @@ def crop_predictions_by_class(pred_data, score_threshold=0.5, padding=10,
             y1 = max(0, int(y1) - padding)
             x2 = min(w, int(x2) + padding)
             y2 = min(h, int(y2) + padding)
+            if x2 <= x1 or y2 <= y1:
+                continue  # 이미지 경계에 clamp되면서 너비/높이가 0이 된 퇴화 박스 - 크롭 불가
             by_label[e['label'].item()].append({
                 'crop': d['image'][y1:y2, x1:x2],
                 'file_name': d['file_name'],
