@@ -231,3 +231,97 @@ def visualize_errors(model, coco_json_path, image_dir, label_to_category_id, sav
     return visualize_errors_from_data(all_data, label_to_category_id, save_dir,
                                        score_threshold=score_threshold, iou_threshold=iou_threshold,
                                        file_prefix=file_prefix)
+
+
+def collect_predictions_ensemble(models, image_dir, score_threshold=0.5,
+                                  extensions=('.png', '.jpg', '.jpeg')):
+    """
+    annotation이 없는 이미지 폴더(예: test_images)에 대해 여러 모델(fold별 체크포인트)의
+    예측을 모아 이미지별로 병합합니다. GT가 없어 mAP 계산 대상이 아니라, 클래스가 무엇인지
+    육안으로 판단하기 위한 탐색용입니다. 모델마다 놓치는 클래스가 다를 수 있어, 한 모델이라도
+    잡아낸 예측은 전부 모읍니다(합집합 방식 앙상블).
+
+    Args:
+        models (list): get_rfdetr_model()으로 만든 모델 리스트 (fold별 체크포인트로 구성)
+        image_dir (str): annotation 없이 이미지만 있는 폴더
+        score_threshold (float): 각 모델 predict()에 넘길 최소 confidence
+        extensions (tuple): 이미지로 취급할 확장자
+
+    Returns:
+        list of dicts: [{'file_name', 'image', 'pred_boxes', 'pred_labels', 'pred_scores', 'pred_fold'}, ...]
+        pred_fold: 각 예측을 만든 모델의 models 리스트 내 인덱스 (어느 fold가 잡아냈는지 구분용)
+    """
+    file_names = sorted(fn for fn in os.listdir(image_dir) if fn.lower().endswith(extensions))
+
+    all_data = []
+    for file_name in file_names:
+        image = np.array(Image.open(os.path.join(image_dir, file_name)).convert('RGB'))
+
+        boxes_list, labels_list, scores_list, fold_list = [], [], [], []
+        for fold_idx, model in enumerate(models):
+            detections = model.predict(image, threshold=score_threshold)
+            n = len(detections.xyxy)
+            if n == 0:
+                continue
+            boxes_list.append(np.array(detections.xyxy))
+            labels_list.append(np.array(detections.class_id))
+            scores_list.append(np.array(detections.confidence))
+            fold_list.extend([fold_idx] * n)
+
+        if boxes_list:
+            pred_boxes = torch.tensor(np.concatenate(boxes_list), dtype=torch.float32)
+            pred_labels = torch.tensor(np.concatenate(labels_list), dtype=torch.int64)
+            pred_scores = torch.tensor(np.concatenate(scores_list), dtype=torch.float32)
+        else:
+            pred_boxes = torch.zeros((0, 4), dtype=torch.float32)
+            pred_labels = torch.zeros((0,), dtype=torch.int64)
+            pred_scores = torch.zeros((0,), dtype=torch.float32)
+
+        all_data.append({
+            'file_name': file_name,
+            'image': image,
+            'pred_boxes': pred_boxes,
+            'pred_labels': pred_labels,
+            'pred_scores': pred_scores,
+            'pred_fold': torch.tensor(fold_list, dtype=torch.int64),
+        })
+
+    return all_data
+
+
+def save_ensemble_gallery(pred_data, label_to_category_id, save_dir, file_prefix='test'):
+    """
+    collect_predictions_ensemble() 결과에 예측 박스(카테고리 id + confidence + 어느 fold가
+    잡았는지)를 그려서 save_dir에 저장합니다. GT가 없어 오답 판정은 하지 않고 예측을 전부
+    그대로 그립니다 - 학습 클래스 대조표(PNG)와 육안으로 비교하기 위한 용도입니다.
+
+    Args:
+        pred_data: collect_predictions_ensemble()의 반환값
+        label_to_category_id (dict): 모델 라벨 -> 원본 category_id 매핑
+        save_dir (str): 저장 폴더
+        file_prefix (str): 저장 파일명 접두어
+
+    Returns:
+        int: 저장된 이미지 수
+    """
+    os.makedirs(save_dir, exist_ok=True)
+
+    for idx, data in enumerate(pred_data):
+        fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+        ax.imshow(data['image'])
+
+        for box, label, score, fold_idx in zip(data['pred_boxes'], data['pred_labels'],
+                                                 data['pred_scores'], data['pred_fold']):
+            _draw_box(ax, box, label.item(), label_to_category_id,
+                      color='red', prefix=f'fold{fold_idx.item()}', score=score.item())
+
+        ax.set_title(data['file_name'], fontsize=9)
+        ax.axis('off')
+
+        stem = os.path.splitext(data['file_name'])[0]
+        save_path = os.path.join(save_dir, f'{file_prefix}_{idx:04d}_{stem}.png')
+        plt.savefig(save_path, bbox_inches='tight', dpi=100)
+        plt.close(fig)
+
+    print(f'Saved {len(pred_data)} images -> {save_dir}')
+    return len(pred_data)

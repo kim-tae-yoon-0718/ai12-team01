@@ -5,6 +5,7 @@
 import os
 import glob
 import math
+from collections import defaultdict
 
 import numpy as np
 import pandas as pd
@@ -84,20 +85,34 @@ def plot_history(history, title='Training History', save_path=None):
     plt.show()
 
 
-def show_error_gallery(vis_dir, ncols=4, figsize_per_image=4):
+def show_error_gallery(vis_dir, ncols=4, figsize_per_image=4, start=0, limit=None):
     """
-    visualize_errors()가 vis_dir에 저장해둔 오답 이미지들을 한 셀에서
-    grid(subplot) 형태로 한 번에 확인합니다. (이미지 재계산 없이 저장된 PNG만 읽음)
+    visualize_errors()/save_ensemble_gallery() 등이 vis_dir에 저장해둔 이미지들을
+    한 셀에서 grid(subplot) 형태로 한 번에 확인합니다. (이미지 재계산 없이 저장된 PNG만 읽음)
+    이름은 "error"지만 폴더 안 PNG를 grid로 보여주는 범용 함수라 오답 이미지가 아닌
+    다른 갤러리(예: 앙상블 예측 결과)에도 그대로 씁니다.
+
+    이미지가 많은 폴더(예: test 전체)는 한 번에 다 그리면 무겁기 때문에,
+    start/limit으로 페이지 단위로 나눠 볼 수 있습니다.
 
     Args:
-        vis_dir (str): 오답 이미지가 저장된 폴더 (report_fold_result() 호출 시 넘긴 vis_dir)
+        vis_dir (str): 이미지가 저장된 폴더
         ncols (int): 한 줄에 표시할 이미지 수
         figsize_per_image (float): 이미지 한 장당 figure 크기(inch) 기준
+        start (int): 파일명 정렬 기준으로 몇 번째부터 볼지 (페이지네이션용)
+        limit (int): 한 번에 표시할 이미지 수 (None이면 start부터 전부)
     """
     paths = sorted(glob.glob(os.path.join(vis_dir, '*.png')))
     if not paths:
         print(f'{vis_dir}에 이미지 없음')
         return
+
+    total = len(paths)
+    paths = paths[start:start + limit] if limit else paths[start:]
+    if not paths:
+        print(f'start={start}가 전체 {total}장 범위를 벗어남')
+        return
+    print(f'{start}~{start + len(paths) - 1} / 총 {total}장')
 
     nrows = math.ceil(len(paths) / ncols)
     fig, axes = plt.subplots(nrows, ncols, figsize=(figsize_per_image * ncols, figsize_per_image * nrows))
@@ -231,3 +246,34 @@ def summarize_per_class(fold_metrics, label_to_category_id, label_counts):
         })
 
     return pd.DataFrame(rows).sort_values('mean_AP', ascending=False)
+
+
+def summarize_missing_classes(pred_data, label_to_category_id, score_threshold=0.5):
+    """
+    collect_predictions_ensemble()로 모은 test 예측 중 confidence >= score_threshold인
+    것만 모아, label_to_category_id에 등록된 학습 클래스 중 test 전체에서 단 한 번도
+    예측되지 않은 클래스를 찾습니다.
+
+    주의: pred_count=0이라고 그 클래스가 test에 실제로 없다는 확정적 근거는 아닙니다.
+    모델이 전부 놓쳤을 가능성도 있으니, 이 표는 육안 재확인 대상을 추리는 용도로만 쓰세요.
+
+    Args:
+        pred_data: collect_predictions_ensemble()의 반환값
+        label_to_category_id (dict): 모델 라벨 -> 원본 category_id 매핑
+        score_threshold (float): 집계에 포함할 예측의 최소 confidence
+
+    Returns:
+        pd.DataFrame: columns = [label, category_id, pred_count], pred_count 오름차순
+                       (0인 행이 위쪽에 옴 - 육안 재확인 우선순위)
+    """
+    counts = defaultdict(int)
+    for d in pred_data:
+        keep = d['pred_scores'] >= score_threshold
+        for lbl in d['pred_labels'][keep].tolist():
+            counts[lbl] += 1
+
+    rows = [
+        {'label': label, 'category_id': cat_id, 'pred_count': counts.get(label, 0)}
+        for label, cat_id in sorted(label_to_category_id.items())
+    ]
+    return pd.DataFrame(rows).sort_values('pred_count')
