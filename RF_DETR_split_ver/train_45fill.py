@@ -51,6 +51,8 @@ FALLBACK_TRAIN_KWARGS = {
     "augmentation_backend",
     "log_per_class_metrics",
     "run_test",
+    "compute_val_loss",
+    "compute_test_loss",
     "eval_max_dets",
     "class_names",
     "resume",
