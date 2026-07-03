@@ -16,20 +16,39 @@ model:
   tag: nano_74_hidden45_mps
 
 train:
-  epochs: 1              # smoke-test default; raise for real training
+  # Local MPS baseline. Keep micro-batch small for memory stability on Apple Silicon.
+  epochs: 12
   batch_size: 1
-  grad_accum_steps: 16
+  grad_accum_steps: 16   # effective batch size 16 on a single MPS device
+  seed: 42
   lr: 0.0001
   lr_encoder: 0.00015
   weight_decay: 0.0001
   lr_scheduler: cosine
-  warmup_epochs: 0.0
-  lr_min_factor: 0.0
+  warmup_epochs: 1.0
+  lr_min_factor: 0.05
+  checkpoint_interval: 1
+  eval_interval: 1
   early_stopping: true
   early_stopping_patience: 10
   early_stopping_min_delta: 0.001
+  early_stopping_use_ema: true
+  use_ema: true
   tensorboard: true
-  resolution: 384        # RF-DETR-N smoke-test resolution
+  progress_bar: tqdm
+  log_per_class_metrics: true
+  run_test: false        # original test split has no public annotations
+  eval_max_dets: 500
+  # MPS/DataLoader tuning. pin_memory is CUDA-only, so keep it off for local Mac.
+  num_workers: 2
+  persistent_workers: true
+  prefetch_factor: 2
+  pin_memory: false
+  amp_dtype: auto
+  multi_scale: false     # more predictable local MPS memory/speed
+  expanded_scales: false
+  augmentation_backend: cpu
+  resolution: 384        # RF-DETR-N native resolution
   device: mps            # cuda | mps | cpu
 
 output:

@@ -16,29 +16,66 @@ import yaml
 from model import get_rfdetr_model
 
 
+SPECIAL_TRAIN_KWARGS = {"device", "resolution"}
+EXPLICIT_TRAIN_KWARGS = {"dataset_dir", "output_dir"}
+FALLBACK_TRAIN_KWARGS = {
+    "epochs",
+    "batch_size",
+    "grad_accum_steps",
+    "auto_batch_target_effective",
+    "auto_batch_max_targets_per_image",
+    "auto_batch_ema_headroom",
+    "lr",
+    "lr_encoder",
+    "weight_decay",
+    "lr_scheduler",
+    "warmup_epochs",
+    "lr_min_factor",
+    "checkpoint_interval",
+    "eval_interval",
+    "early_stopping",
+    "early_stopping_patience",
+    "early_stopping_min_delta",
+    "early_stopping_use_ema",
+    "use_ema",
+    "tensorboard",
+    "progress_bar",
+    "num_workers",
+    "persistent_workers",
+    "prefetch_factor",
+    "pin_memory",
+    "amp_dtype",
+    "seed",
+    "multi_scale",
+    "expanded_scales",
+    "augmentation_backend",
+    "log_per_class_metrics",
+    "run_test",
+    "eval_max_dets",
+    "class_names",
+    "resume",
+}
+
+
 def load_config(path: str | Path) -> dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
+def allowed_train_kwargs() -> set[str]:
+    try:
+        from rfdetr.config import TrainConfig
+    except Exception:
+        return FALLBACK_TRAIN_KWARGS | SPECIAL_TRAIN_KWARGS
+
+    return (set(TrainConfig.model_fields) - EXPLICIT_TRAIN_KWARGS) | SPECIAL_TRAIN_KWARGS
+
+
 def compact_train_kwargs(train_cfg: dict[str, Any]) -> dict[str, Any]:
-    allowed = {
-        "epochs",
-        "batch_size",
-        "grad_accum_steps",
-        "lr",
-        "lr_encoder",
-        "weight_decay",
-        "lr_scheduler",
-        "warmup_epochs",
-        "lr_min_factor",
-        "early_stopping",
-        "early_stopping_patience",
-        "early_stopping_min_delta",
-        "tensorboard",
-        "resolution",
-        "device",
-    }
+    allowed = allowed_train_kwargs()
+    ignored = sorted(key for key, value in train_cfg.items() if key not in allowed and value is not None)
+    if ignored:
+        print(f"ignored train config keys: {ignored}")
     return {key: value for key, value in train_cfg.items() if key in allowed and value is not None}
 
 
