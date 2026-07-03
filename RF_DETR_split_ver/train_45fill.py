@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train RF-DETR on the 56-class 45-fill dataset without k-fold wrapping."""
+"""Train RF-DETR on prepared 45-fill datasets without k-fold wrapping."""
 
 from __future__ import annotations
 

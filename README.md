@@ -77,6 +77,26 @@ python train_45fill.py --config config_45fill.yaml
 - 기본 `link-mode`는 `symlink`라 이미지 중복 복사를 피합니다. Colab/Drive에 업로드할 실파일 dataset이 필요하면 `--link-mode copy`를 쓰세요.
 - `config_45fill.yaml`의 기본값은 로컬 MPS smoke test용입니다. CUDA/Colab에서는 `train.device: cuda`, `output.*`, `data.*` 경로를 환경에 맞게 바꾸세요.
 
+### 56종 + hidden N18 crop 45-fill로 RF-DETR 단일 학습
+
+테스트셋 검수에서 정리한 hidden N57-N74 18종은 AIHub 조합 원본을 crop으로 뽑은 export를 사용합니다. 조합 원본 이미지를 그대로 쓰면 주변 알약 annotation 누락이 배경 학습 노이즈가 될 수 있으므로, 이 브랜치에서는 hidden class를 crop 이미지 + 단일 bbox로 결합합니다.
+
+```bash
+cd RF_DETR_split_ver
+
+python prepare_74_hidden45_dataset.py \
+  --base56-dir /path/to/train_56_45_merged_coco \
+  --hidden18-dir /path/to/hidden_train_import \
+  --out-dir /path/to/rfdetr_dataset_74_hidden45
+
+python train_74_hidden45.py --config config_74_hidden45.yaml --dry-run
+python train_74_hidden45.py --config config_74_hidden45.yaml
+```
+
+- `prepare_74_hidden45_dataset.py`는 COCO `category_id`를 프로젝트 제출/평가 기준인 K-code 숫자로 둡니다. 예: `K-001900 -> 1900`.
+- RF-DETR은 custom COCO dataset을 읽을 때 sparse K-code id를 내부 0-based label로 remap합니다. 출력 dataset의 `category_mapping.csv`에서 K-code, 내부 label, N번호, 약품명, 각인, hidden 후보 상태를 함께 확인할 수 있습니다.
+- `config_74_hidden45.yaml` 기본값은 로컬 MPS smoke test용입니다. CUDA/Colab에서는 `train.device: cuda`, `output.*`, `data.*` 경로를 환경에 맞게 바꾸세요.
+
 ---
 
 ## Annotation 수정 내역
