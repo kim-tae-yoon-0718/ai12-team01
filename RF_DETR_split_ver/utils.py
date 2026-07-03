@@ -277,3 +277,35 @@ def summarize_missing_classes(pred_data, label_to_category_id, score_threshold=0
         for label, cat_id in sorted(label_to_category_id.items())
     ]
     return pd.DataFrame(rows).sort_values('pred_count')
+
+
+def save_class_crops(by_label, label_to_category_id, save_dir):
+    """
+    visualize.crop_predictions_by_class()의 결과를 라벨(예측 클래스)별 하위 폴더에
+    저장합니다. save_dir/label{label:02d}_cat{category_id}/ 안에 그 클래스로 예측된
+    crop들이 모이므로, 학습 클래스 대조표(PNG)와 나란히 놓고 클래스별로 훑어보기 좋습니다.
+
+    Args:
+        by_label: visualize.crop_predictions_by_class()의 반환값
+        label_to_category_id (dict): 모델 라벨 -> 원본 category_id 매핑
+        save_dir (str): 저장 루트 폴더
+
+    Returns:
+        dict: {label: 저장된 폴더 경로} (예측이 하나도 없던 라벨은 포함 안 됨)
+    """
+    class_dirs = {}
+    for label, items in sorted(by_label.items()):
+        cat_id = label_to_category_id.get(label, 'unknown')
+        label_dir = os.path.join(save_dir, f'label{label:02d}_cat{cat_id}')
+        os.makedirs(label_dir, exist_ok=True)
+
+        for idx, item in enumerate(items):
+            stem = os.path.splitext(item['file_name'])[0]
+            save_path = os.path.join(
+                label_dir, f'{idx:03d}_{stem}_fold{item["fold_idx"]}_{item["score"]:.2f}.png')
+            plt.imsave(save_path, item['crop'])
+
+        class_dirs[label] = label_dir
+
+    print(f'{len(class_dirs)}개 클래스 폴더 생성 -> {save_dir}')
+    return class_dirs

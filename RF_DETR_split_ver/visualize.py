@@ -325,3 +325,39 @@ def save_ensemble_gallery(pred_data, label_to_category_id, save_dir, file_prefix
 
     print(f'Saved {len(pred_data)} images -> {save_dir}')
     return len(pred_data)
+
+
+def crop_predictions_by_class(pred_data, score_threshold=0.5, padding=10):
+    """
+    collect_predictions_ensemble() 결과에서 confidence >= score_threshold인 예측 박스를
+    예측 라벨(클래스)별로 잘라(crop) 모읍니다. 이미지 전체가 아니라 박스 영역만 잘라서,
+    "클래스 하나당 대표 이미지 1개"로 정리된 학습 클래스 대조표와 같은 단위로 비교할 수
+    있게 합니다.
+
+    Args:
+        pred_data: collect_predictions_ensemble()의 반환값
+        score_threshold (float): 모을 예측의 최소 confidence
+        padding (int): 박스 주변 여백(px) - 잘랐을 때 알약이 너무 꽉 차 보이지 않게
+
+    Returns:
+        dict: {label: [{'crop': np.ndarray, 'file_name', 'score', 'fold_idx'}, ...]}
+    """
+    by_label = defaultdict(list)
+    for d in pred_data:
+        h, w = d['image'].shape[:2]
+        for box, label, score, fold_idx in zip(d['pred_boxes'], d['pred_labels'],
+                                                 d['pred_scores'], d['pred_fold']):
+            if score.item() < score_threshold:
+                continue
+            x1, y1, x2, y2 = box.tolist()
+            x1 = max(0, int(x1) - padding)
+            y1 = max(0, int(y1) - padding)
+            x2 = min(w, int(x2) + padding)
+            y2 = min(h, int(y2) + padding)
+            by_label[label.item()].append({
+                'crop': d['image'][y1:y2, x1:x2],
+                'file_name': d['file_name'],
+                'score': score.item(),
+                'fold_idx': fold_idx.item(),
+            })
+    return by_label
