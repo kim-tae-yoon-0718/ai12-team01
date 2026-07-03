@@ -327,37 +327,88 @@ def save_ensemble_gallery(pred_data, label_to_category_id, save_dir, file_prefix
     return len(pred_data)
 
 
-def crop_predictions_by_class(pred_data, score_threshold=0.5, padding=10):
+def _cluster_same_class_boxes(boxes, labels, scores, folds, iou_threshold):
+    """
+    같은 라벨끼리 IoU >= iou_threshold로 겹치는 박스들을 한 그룹(=같은 알약을 여러 fold가
+    예측한 것으로 간주)으로 묶어, 그룹당 confidence가 가장 높은 박스 하나만 대표로 남깁니다.
+    (NMS와 유사하지만, 몇 개 fold가 동의했는지(agree_count)를 같이 기록한다는 점이 다름)
+
+    Returns:
+        list of dicts: [{'box', 'label', 'score', 'fold_idx', 'agree_count'}, ...]
+    """
+    order = torch.argsort(scores, descending=True)
+    used = torch.zeros(len(boxes), dtype=torch.bool)
+    entries = []
+
+    for i in order.tolist():
+        if used[i]:
+            continue
+        same_label = labels == labels[i]
+        ious = box_iou(boxes[i:i + 1], boxes)[0]
+        group = same_label & (ious >= iou_threshold) & (~used)
+        used |= group
+
+        entries.append({
+            'box': boxes[i], 'label': labels[i], 'score': scores[i],
+            'fold_idx': folds[i].item(), 'agree_count': int(group.sum().item()),
+        })
+    return entries
+
+
+def crop_predictions_by_class(pred_data, score_threshold=0.5, padding=10,
+                               iou_threshold=0.5, dedup=True):
     """
     collect_predictions_ensemble() 결과에서 confidence >= score_threshold인 예측 박스를
     예측 라벨(클래스)별로 잘라(crop) 모읍니다. 이미지 전체가 아니라 박스 영역만 잘라서,
     "클래스 하나당 대표 이미지 1개"로 정리된 학습 클래스 대조표와 같은 단위로 비교할 수
     있게 합니다.
 
+    dedup=True(기본값)면, 같은 이미지 안에서 같은 클래스로 겹치는(IoU >= iou_threshold)
+    여러 fold의 예측을 하나로 합쳐 크롭 1장만 남깁니다 (여러 fold가 같은 알약에 동의한
+    경우 중복 저장 방지). 몇 개 fold가 동의했는지는 'agree_count'로 남아서, dedup 이후에도
+    "5개 fold가 다 동의한 확실한 예측"인지 신호를 잃지 않습니다.
+
     Args:
         pred_data: collect_predictions_ensemble()의 반환값
         score_threshold (float): 모을 예측의 최소 confidence
         padding (int): 박스 주변 여백(px) - 잘랐을 때 알약이 너무 꽉 차 보이지 않게
+        iou_threshold (float): dedup 시 "같은 알약"으로 볼 IoU 기준
+        dedup (bool): False면 기존처럼 fold별 예측을 전부 따로 남김 (agree_count는 항상 1)
 
     Returns:
-        dict: {label: [{'crop': np.ndarray, 'file_name', 'score', 'fold_idx'}, ...]}
+        dict: {label: [{'crop': np.ndarray, 'file_name', 'score', 'fold_idx', 'agree_count'}, ...]}
     """
     by_label = defaultdict(list)
     for d in pred_data:
         h, w = d['image'].shape[:2]
-        for box, label, score, fold_idx in zip(d['pred_boxes'], d['pred_labels'],
-                                                 d['pred_scores'], d['pred_fold']):
-            if score.item() < score_threshold:
-                continue
-            x1, y1, x2, y2 = box.tolist()
+        boxes, labels = d['pred_boxes'], d['pred_labels']
+        scores, folds = d['pred_scores'], d['pred_fold']
+
+        keep = scores >= score_threshold
+        boxes, labels, scores, folds = boxes[keep], labels[keep], scores[keep], folds[keep]
+        if len(boxes) == 0:
+            continue
+
+        if dedup:
+            entries = _cluster_same_class_boxes(boxes, labels, scores, folds, iou_threshold)
+        else:
+            entries = [
+                {'box': boxes[i], 'label': labels[i], 'score': scores[i],
+                 'fold_idx': folds[i].item(), 'agree_count': 1}
+                for i in range(len(boxes))
+            ]
+
+        for e in entries:
+            x1, y1, x2, y2 = e['box'].tolist()
             x1 = max(0, int(x1) - padding)
             y1 = max(0, int(y1) - padding)
             x2 = min(w, int(x2) + padding)
             y2 = min(h, int(y2) + padding)
-            by_label[label.item()].append({
+            by_label[e['label'].item()].append({
                 'crop': d['image'][y1:y2, x1:x2],
                 'file_name': d['file_name'],
-                'score': score.item(),
-                'fold_idx': fold_idx.item(),
+                'score': e['score'].item(),
+                'fold_idx': e['fold_idx'],
+                'agree_count': e['agree_count'],
             })
     return by_label

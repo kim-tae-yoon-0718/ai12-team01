@@ -301,8 +301,10 @@ def save_class_crops(by_label, label_to_category_id, save_dir):
 
         for idx, item in enumerate(items):
             stem = os.path.splitext(item['file_name'])[0]
+            agree = item.get('agree_count', 1)
             save_path = os.path.join(
-                label_dir, f'{idx:03d}_{stem}_fold{item["fold_idx"]}_{item["score"]:.2f}.png')
+                label_dir,
+                f'{idx:03d}_{stem}_agree{agree}_fold{item["fold_idx"]}_{item["score"]:.2f}.png')
             plt.imsave(save_path, item['crop'])
 
         class_dirs[label] = label_dir
