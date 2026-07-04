@@ -44,13 +44,14 @@ def mount_drive():
     drive.mount('/content/drive')
 
 
-def prepare_data(config):
+def prepare_data(config, archive_dir=None):
     """
     data_root를 찾아 5-fold 데이터셋을 생성하고 zip으로 백업합니다.
     (원본 [1] 경로 탐색 + [2-A] 5-fold 데이터 생성 단계에 해당)
 
     Args:
         config (dict): train.load_config()의 반환값
+        archive_dir (str): 주어지면 zip 백업을 이 경로에 저장합니다 (기본: data_root의 부모 경로)
 
     Returns:
         dict: dataset.build_fold_dataset()의 반환값
@@ -64,7 +65,7 @@ def prepare_data(config):
     check_data_paths(data_root)
 
     proj_root = os.path.dirname(data_root)
-    archive_base_path = os.path.join(proj_root, data_cfg.get('archive_name', 'dataset_5fold'))
+    archive_base_path = os.path.join(archive_dir or proj_root, data_cfg.get('archive_name', 'dataset_5fold'))
 
     result = build_fold_dataset(
         data_root=data_root,
