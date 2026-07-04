@@ -21,7 +21,7 @@ train:
   epochs: 12
   batch_size: 1          # micro-batch size; kept small for MPS memory stability
   grad_accum_steps: 16   # effective batch size 16 on a single MPS device
-  seed: 42
+  seed: 42               # RF-DETR calls seed_everything(seed, workers=True) at fit start
 
   # Optimizer/scheduler. RF-DETR builds AdamW internally with these LR/decay values.
   lr: 0.0001
