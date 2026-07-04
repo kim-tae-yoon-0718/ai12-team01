@@ -92,6 +92,30 @@ def place_file(src: Path, dst: Path, mode: str) -> None:
         dst.symlink_to(src)
 
 
+def validate_split_files(out_dir: Path, split: str) -> dict[str, Any]:
+    ann_path = out_dir / split / "_annotations.coco.json"
+    payload = read_json(ann_path)
+    missing: list[str] = []
+    for image in payload.get("images", []):
+        image_path = out_dir / split / str(image["file_name"])
+        if not image_path.exists():
+            missing.append(str(image_path))
+
+    if missing:
+        sample = "\n".join(f"  - {path}" for path in missing[:20])
+        more = f"\n  ... and {len(missing) - 20} more" if len(missing) > 20 else ""
+        raise FileNotFoundError(
+            f"{split}: {len(missing)} image file(s) referenced by COCO JSON are missing\n"
+            f"{sample}{more}"
+        )
+
+    return {
+        "split": split,
+        "images_checked": len(payload.get("images", [])),
+        "missing_images": 0,
+    }
+
+
 def natural_image_key(path: Path) -> tuple[int, int | str]:
     if path.stem.isdigit():
         return (0, int(path.stem))
@@ -499,6 +523,7 @@ def main() -> None:
         summary["splits"].append(write_empty_test(args.out_dir, categories))
 
     write_category_table(args.out_dir, categories)
+    summary["file_validation"] = [validate_split_files(args.out_dir, split["split"]) for split in summary["splits"]]
     write_json(args.out_dir / "summary.json", summary)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 

@@ -64,6 +64,7 @@ FALLBACK_TRAIN_KWARGS = {
 
 
 CHECKPOINT_RE = re.compile(r"checkpoint_(\d+)\.ckpt$")
+DATASET_PREFLIGHT_SPLITS = ("train", "valid")
 
 
 def load_config(path: str | Path) -> dict[str, Any]:
@@ -98,6 +99,45 @@ def latest_epoch_checkpoint(output_dir: Path) -> Path | None:
     if not candidates:
         return None
     return max(candidates, key=lambda item: (item[0], item[1]))[2]
+
+
+def missing_split_images(dataset_dir: Path, split: str) -> list[str]:
+    ann_path = dataset_dir / split / "_annotations.coco.json"
+    if not ann_path.exists():
+        raise FileNotFoundError(f"RF-DETR {split} annotations are missing: {ann_path}")
+
+    payload = json.loads(ann_path.read_text(encoding="utf-8"))
+    split_dir = dataset_dir / split
+    missing: list[str] = []
+    for image in payload.get("images", []):
+        file_name = image.get("file_name")
+        if not file_name:
+            continue
+        image_path = split_dir / str(file_name)
+        if not image_path.exists():
+            missing.append(str(image_path))
+    return missing
+
+
+def validate_dataset_files(dataset_dir: Path, splits: tuple[str, ...] = DATASET_PREFLIGHT_SPLITS) -> dict[str, int]:
+    summary: dict[str, int] = {}
+    messages: list[str] = []
+    for split in splits:
+        missing = missing_split_images(dataset_dir, split)
+        summary[f"{split}_missing_images"] = len(missing)
+        if missing:
+            sample = "\n".join(f"  - {path}" for path in missing[:20])
+            more = f"\n  ... and {len(missing) - 20} more" if len(missing) > 20 else ""
+            messages.append(f"{split}: {len(missing)} missing image file(s)\n{sample}{more}")
+
+    if messages:
+        details = "\n\n".join(messages)
+        raise FileNotFoundError(
+            "RF-DETR dataset image preflight failed. Regenerate the dataset with "
+            "`prepare_74_hidden45_dataset.py` or fix the image links before training.\n"
+            f"{details}"
+        )
+    return summary
 
 
 def apply_auto_resume(train_cfg: dict[str, Any], output_dir: Path) -> dict[str, Any]:
@@ -259,6 +299,7 @@ def train_once(config: dict[str, Any], epochs_override: int | None = None, dry_r
         raise FileNotFoundError(f"RF-DETR dataset is not prepared: {dataset_dir}")
     if not (dataset_dir / "valid" / "_annotations.coco.json").exists():
         raise FileNotFoundError(f"RF-DETR valid annotations are missing: {dataset_dir}")
+    dataset_file_summary = validate_dataset_files(dataset_dir)
 
     tag = model_cfg.get("tag", model_cfg.get("variant", "rfdetr"))
     output_dir = Path(output_cfg["local_output_dir"]) / tag
@@ -275,6 +316,7 @@ def train_once(config: dict[str, Any], epochs_override: int | None = None, dry_r
         "model_variant": model_cfg["variant"],
         "model_tag": tag,
         "train_kwargs": train_kwargs,
+        "dataset_file_summary": dataset_file_summary,
         "resume": resume_summary,
         "torch": {
             "version": torch.__version__,
