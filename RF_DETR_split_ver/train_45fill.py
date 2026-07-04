@@ -51,6 +51,7 @@ FALLBACK_TRAIN_KWARGS = {
     "seed",
     "multi_scale",
     "expanded_scales",
+    "aug_config",
     "augmentation_backend",
     "log_per_class_metrics",
     "run_test",

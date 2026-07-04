@@ -73,6 +73,13 @@ train:
   amp_dtype: auto
   multi_scale: false     # more predictable local MPS memory/speed
   expanded_scales: false
+  # Light augmentation only. Avoid flips/strong rotations because pill imprint orientation matters.
+  # This should not increase checkpoint size; it only adds small CPU preprocessing cost during training.
+  aug_config:
+    RandomBrightnessContrast:
+      brightness_limit: 0.08
+      contrast_limit: 0.08
+      p: 0.25
   augmentation_backend: cpu
   resolution: 384        # RF-DETR-N native resolution
   device: mps            # cuda | mps | cpu
