@@ -12,6 +12,8 @@ data:
   test_images_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/sprint_ai_project1_data/test_images
 
 model:
+  # Active model: RF-DETR Nano. Change variant to small/medium/base/large for larger models.
+  # tag controls the output folder name under output.local_output_dir.
   variant: nano          # nano | small | medium | base | large
   tag: nano_74_hidden45_mps
 

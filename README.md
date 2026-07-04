@@ -82,6 +82,7 @@ python train_45fill.py --config config_45fill.yaml
 테스트셋 검수에서 정리한 hidden N57-N74 18종은 AIHub 조합 원본을 crop으로 뽑은 export를 사용합니다. 조합 원본 이미지를 그대로 쓰면 주변 알약 annotation 누락이 배경 학습 노이즈가 될 수 있으므로, 이 브랜치에서는 hidden class를 crop 이미지 + 단일 bbox로 결합합니다.
 
 노트북으로 실행하려면 `RF_DETR_split_ver/train_74_hidden45.ipynb`를 열고 기본 검증 셀을 실행한 뒤, 실제 학습 시 `RUN_FULL_TRAIN = True`로 바꾸면 됩니다. 기본 config는 로컬 Apple Silicon MPS 기준으로 `batch_size=1`, `grad_accum_steps=16`, `num_workers=2`, `pin_memory=false`를 사용합니다.
+현재 기본 모델은 `config_74_hidden45.yaml`의 `model.variant: nano`, 즉 RF-DETR Nano이며, 산출물 태그는 `model.tag: nano_74_hidden45_mps`입니다.
 
 ```bash
 cd RF_DETR_split_ver
