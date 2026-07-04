@@ -17,20 +17,39 @@ model:
 
 train:
   # Local MPS baseline. Keep core run controls here so notebook and CLI runs match.
+  # Normal runs should change these values here, not inside notebook cells.
   epochs: 12
-  batch_size: 1
+  batch_size: 1          # micro-batch size; kept small for MPS memory stability
   grad_accum_steps: 16   # effective batch size 16 on a single MPS device
   seed: 42
+
+  # Optimizer/scheduler. RF-DETR builds AdamW internally with these LR/decay values.
   lr: 0.0001
   lr_encoder: 0.00015
   weight_decay: 0.0001
   lr_scheduler: cosine
   warmup_epochs: 1.0
   lr_min_factor: 0.05
-  # Save every epoch so training can resume from the latest checkpoint_N.ckpt.
+
+  # Resume/checkpoint policy.
+  # checkpoint_interval=1 writes checkpoint_N.ckpt after every epoch; these .ckpt files
+  # contain optimizer/scheduler/epoch state and are the right files for interrupted training.
+  # auto_resume is a local wrapper option, not an RF-DETR native option: when true and
+  # resume is null, train_45fill.py picks the newest checkpoint_N.ckpt from output_dir.
+  # Set resume to a concrete .ckpt path to force a specific checkpoint, or set
+  # auto_resume=false and use a new model.tag/clean output_dir for a fresh run.
   checkpoint_interval: 1
   auto_resume: true      # wrapper option: if resume is null, use latest checkpoint_N.ckpt in output_dir
   resume: null           # set an explicit .ckpt path here to override auto-resume
+
+  # Validation policy.
+  # eval_interval=1 evaluates valid/_annotations.coco.json every epoch and writes metrics.csv.
+  # eval_max_dets=100 matches the RT-DETR/COCOeval maxDets=100 convention used for comparison.
+  # The wrapper also reads metrics.csv after training and copies the best val/mAP_75 epoch
+  # checkpoint to checkpoint_best_map75.ckpt and {model_tag}_best_map75.ckpt.
+  # If training was already started before the wrapper change, run:
+  #   python train_74_hidden45.py --config config_74_hidden45.yaml --finalize-only
+  # to refresh best_total and best_map75 files without retraining.
   eval_interval: 1
   early_stopping: true
   early_stopping_patience: 10
