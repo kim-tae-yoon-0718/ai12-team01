@@ -16,7 +16,7 @@ model:
   tag: nano_74_hidden45_mps
 
 train:
-  # Local MPS baseline. Keep micro-batch small for memory stability on Apple Silicon.
+  # Local MPS baseline. Keep core run controls here so notebook and CLI runs match.
   epochs: 12
   batch_size: 1
   grad_accum_steps: 16   # effective batch size 16 on a single MPS device
@@ -27,7 +27,10 @@ train:
   lr_scheduler: cosine
   warmup_epochs: 1.0
   lr_min_factor: 0.05
+  # Save every epoch so training can resume from the latest checkpoint_N.ckpt.
   checkpoint_interval: 1
+  auto_resume: true      # wrapper option: if resume is null, use latest checkpoint_N.ckpt in output_dir
+  resume: null           # set an explicit .ckpt path here to override auto-resume
   eval_interval: 1
   early_stopping: true
   early_stopping_patience: 10
@@ -40,7 +43,7 @@ train:
   run_test: false        # original test split has no public annotations
   compute_val_loss: true
   compute_test_loss: false
-  eval_max_dets: 100       # match RT-DETR/COCOeval maxDets=100 metric convention
+  eval_max_dets: 100     # match RT-DETR/COCOeval maxDets=100 metric convention
   # MPS/DataLoader tuning. pin_memory is CUDA-only, so keep it off for local Mac.
   num_workers: 2
   persistent_workers: true

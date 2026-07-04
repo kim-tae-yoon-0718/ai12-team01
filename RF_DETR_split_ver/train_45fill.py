@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import math
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -59,6 +62,9 @@ FALLBACK_TRAIN_KWARGS = {
 }
 
 
+CHECKPOINT_RE = re.compile(r"checkpoint_(\d+)\.ckpt$")
+
+
 def load_config(path: str | Path) -> dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
@@ -81,6 +87,164 @@ def compact_train_kwargs(train_cfg: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in train_cfg.items() if key in allowed and value is not None}
 
 
+def latest_epoch_checkpoint(output_dir: Path) -> Path | None:
+    candidates: list[tuple[int, float, Path]] = []
+    for path in output_dir.glob("checkpoint_*.ckpt"):
+        match = CHECKPOINT_RE.match(path.name)
+        if not match:
+            continue
+        candidates.append((int(match.group(1)), path.stat().st_mtime, path))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: (item[0], item[1]))[2]
+
+
+def apply_auto_resume(train_cfg: dict[str, Any], output_dir: Path) -> dict[str, Any]:
+    auto_resume = bool(train_cfg.pop("auto_resume", False))
+    train_cfg.pop("resume_glob", None)
+    explicit_resume = train_cfg.get("resume")
+    if explicit_resume:
+        print(f"resume checkpoint explicitly configured: {explicit_resume}")
+        return {
+            "auto_resume": auto_resume,
+            "resume_checkpoint": str(explicit_resume),
+            "resume_source": "explicit",
+        }
+
+    if not auto_resume:
+        return {
+            "auto_resume": False,
+            "resume_checkpoint": "",
+            "resume_source": "disabled",
+        }
+
+    checkpoint = latest_epoch_checkpoint(output_dir)
+    if checkpoint is None:
+        return {
+            "auto_resume": True,
+            "resume_checkpoint": "",
+            "resume_source": "none_found",
+        }
+
+    train_cfg["resume"] = str(checkpoint)
+    print(f"auto-resume checkpoint selected: {checkpoint}")
+    return {
+        "auto_resume": True,
+        "resume_checkpoint": str(checkpoint),
+        "resume_source": "latest_epoch_checkpoint",
+    }
+
+
+def safe_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(parsed):
+        return None
+    return parsed
+
+
+def best_map75_epoch(metrics_csv: Path) -> dict[str, Any] | None:
+    if not metrics_csv.exists():
+        return None
+
+    best: dict[str, Any] | None = None
+    with metrics_csv.open("r", encoding="utf-8", newline="") as f:
+        for row in csv.DictReader(f):
+            score = safe_float(row.get("val/mAP_75"))
+            epoch_value = safe_float(row.get("epoch"))
+            if score is None or epoch_value is None:
+                continue
+            epoch = int(epoch_value)
+            step = safe_float(row.get("step"))
+            if best is None or score > best["map75"]:
+                best = {
+                    "epoch": epoch,
+                    "step": int(step) if step is not None else None,
+                    "map75": score,
+                    "map50_95": safe_float(row.get("val/mAP_50_95")),
+                    "ema_map50_95": safe_float(row.get("val/ema_mAP_50_95")),
+                }
+    return best
+
+
+def save_map75_checkpoint(output_dir: Path, backup_dir: Path, tag: str) -> dict[str, Any]:
+    metrics_csv = output_dir / "metrics.csv"
+    best = best_map75_epoch(metrics_csv)
+    if best is None:
+        print("mAP75 checkpoint not saved: val/mAP_75 was not found in metrics.csv")
+        return {"map75_checkpoint": "", "map75_summary": None}
+
+    src = output_dir / f"checkpoint_{best['epoch']}.ckpt"
+    summary = {
+        **best,
+        "source_checkpoint": str(src),
+        "output_checkpoint": "",
+        "backup_checkpoint": "",
+    }
+    if not src.exists():
+        print(f"mAP75 checkpoint not saved: missing {src}")
+        (output_dir / "map75_summary.json").write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return {"map75_checkpoint": "", "map75_summary": summary}
+
+    output_dst = output_dir / "checkpoint_best_map75.ckpt"
+    backup_dst = backup_dir / f"{tag}_best_map75.ckpt"
+    shutil.copy2(src, output_dst)
+    shutil.copy2(src, backup_dst)
+    summary["output_checkpoint"] = str(output_dst)
+    summary["backup_checkpoint"] = str(backup_dst)
+    (output_dir / "map75_summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(f"best mAP75 checkpoint copied: {backup_dst} (epoch={best['epoch']}, mAP75={best['map75']:.6f})")
+    return {"map75_checkpoint": str(backup_dst), "map75_summary": summary}
+
+
+def copy_best_total_checkpoint(output_dir: Path, backup_dir: Path, tag: str) -> str:
+    best_src = output_dir / "checkpoint_best_total.pth"
+    if not best_src.exists():
+        print("checkpoint_best_total.pth not found")
+        return ""
+
+    best_dst = backup_dir / f"{tag}_best.pth"
+    shutil.copy2(best_src, best_dst)
+    print(f"best checkpoint copied: {best_dst}")
+    return str(best_dst)
+
+
+def finalize_outputs(config: dict[str, Any]) -> dict[str, Any]:
+    model_cfg = config["model"]
+    output_cfg = config["output"]
+    tag = model_cfg.get("tag", model_cfg.get("variant", "rfdetr"))
+    output_dir = Path(output_cfg["local_output_dir"]) / tag
+    backup_dir = Path(output_cfg["backup_dir"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    summary_path = output_dir / "run_summary.json"
+    if summary_path.exists():
+        run_summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    else:
+        run_summary = {
+            "output_dir": str(output_dir),
+            "backup_dir": str(backup_dir),
+            "model_variant": model_cfg["variant"],
+            "model_tag": tag,
+        }
+
+    run_summary["best_checkpoint"] = copy_best_total_checkpoint(output_dir, backup_dir, tag)
+    run_summary.update(save_map75_checkpoint(output_dir, backup_dir, tag))
+    summary_path.write_text(json.dumps(run_summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    return run_summary
+
+
 def train_once(config: dict[str, Any], epochs_override: int | None = None, dry_run: bool = False) -> dict[str, Any]:
     data_cfg = config["data"]
     model_cfg = config["model"]
@@ -101,6 +265,7 @@ def train_once(config: dict[str, Any], epochs_override: int | None = None, dry_r
     output_dir.mkdir(parents=True, exist_ok=True)
     backup_dir.mkdir(parents=True, exist_ok=True)
 
+    resume_summary = apply_auto_resume(train_cfg, output_dir)
     train_kwargs = compact_train_kwargs(train_cfg)
     run_summary = {
         "dataset_dir": str(dataset_dir),
@@ -109,6 +274,7 @@ def train_once(config: dict[str, Any], epochs_override: int | None = None, dry_r
         "model_variant": model_cfg["variant"],
         "model_tag": tag,
         "train_kwargs": train_kwargs,
+        "resume": resume_summary,
         "torch": {
             "version": torch.__version__,
             "cuda_available": torch.cuda.is_available(),
@@ -130,15 +296,8 @@ def train_once(config: dict[str, Any], epochs_override: int | None = None, dry_r
         **train_kwargs,
     )
 
-    best_src = output_dir / "checkpoint_best_total.pth"
-    if best_src.exists():
-        best_dst = backup_dir / f"{tag}_best.pth"
-        shutil.copy2(best_src, best_dst)
-        run_summary["best_checkpoint"] = str(best_dst)
-        print(f"best checkpoint copied: {best_dst}")
-    else:
-        run_summary["best_checkpoint"] = ""
-        print("checkpoint_best_total.pth not found")
+    run_summary["best_checkpoint"] = copy_best_total_checkpoint(output_dir, backup_dir, tag)
+    run_summary.update(save_map75_checkpoint(output_dir, backup_dir, tag))
 
     summary_path.write_text(json.dumps(run_summary, ensure_ascii=False, indent=2), encoding="utf-8")
     return run_summary
@@ -149,8 +308,17 @@ def main() -> None:
     parser.add_argument("--config", default=os.path.join(os.path.dirname(__file__), "config_45fill.yaml"))
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--finalize-only",
+        action="store_true",
+        help="Do not train; copy checkpoint_best_total.pth and best val/mAP_75 epoch checkpoint to backup_dir.",
+    )
     args = parser.parse_args()
-    train_once(load_config(args.config), epochs_override=args.epochs, dry_run=args.dry_run)
+    config = load_config(args.config)
+    if args.finalize_only:
+        finalize_outputs(config)
+    else:
+        train_once(config, epochs_override=args.epochs, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

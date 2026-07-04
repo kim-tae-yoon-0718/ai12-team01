@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import os
 
-from train_45fill import load_config, train_once
+from train_45fill import finalize_outputs, load_config, train_once
 
 
 def main() -> None:
@@ -14,8 +14,17 @@ def main() -> None:
     parser.add_argument("--config", default=os.path.join(os.path.dirname(__file__), "config_74_hidden45.yaml"))
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--finalize-only",
+        action="store_true",
+        help="Do not train; copy checkpoint_best_total.pth and best val/mAP_75 epoch checkpoint to backup_dir.",
+    )
     args = parser.parse_args()
-    train_once(load_config(args.config), epochs_override=args.epochs, dry_run=args.dry_run)
+    config = load_config(args.config)
+    if args.finalize_only:
+        finalize_outputs(config)
+    else:
+        train_once(config, epochs_override=args.epochs, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":
