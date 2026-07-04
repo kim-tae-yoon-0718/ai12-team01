@@ -73,8 +73,8 @@ train:
   amp_dtype: auto
   multi_scale: false     # more predictable local MPS memory/speed
   expanded_scales: false
-  # Light augmentation only. Avoid flips/strong rotations because pill imprint orientation matters.
-  # Affine scale keeps the 384 canvas size while varying pill size and bbox coordinates.
+  # Light augmentation only. Avoid flips because mirrored imprints are unrealistic.
+  # Affine keeps the 384 canvas size while varying pill size, position, rotation, and bbox coordinates.
   # This should not increase checkpoint size; it only adds small CPU preprocessing cost during training.
   aug_config:
     RandomBrightnessContrast:
@@ -82,13 +82,13 @@ train:
       contrast_limit: 0.08
       p: 0.25
     Affine:
-      scale: [0.90, 1.10]
+      scale: [0.85, 1.50]
       keep_ratio: true
-      translate_percent: [-0.03, 0.03]
-      rotate: 0
+      translate_percent: [-0.04, 0.04]
+      rotate: [-12, 12]
       shear: 0
       border_mode: 4     # cv2.BORDER_REFLECT_101 avoids artificial black margins
-      p: 0.25
+      p: 0.30
   augmentation_backend: cpu
   resolution: 384        # RF-DETR-N native resolution
   device: mps            # cuda | mps | cpu
