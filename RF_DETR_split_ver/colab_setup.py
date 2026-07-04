@@ -83,12 +83,14 @@ def prepare_data(config, archive_dir=None):
     return result
 
 
-def restore_data(config):
+def restore_data(config, archive_dir=None):
     """
     이미 생성해둔 dataset_5fold.zip을 복원합니다. (원본 [2-B] 단계에 해당)
 
     Args:
         config (dict): train.load_config()의 반환값
+        archive_dir (str): 주어지면 이 경로에서 zip을 찾습니다 (기본: data_root의 부모 경로).
+            prepare_data(config, archive_dir=...)로 저장했다면 동일한 경로를 넘겨야 합니다.
     """
     data_cfg = config['data']
     data_root = find_data_root(
@@ -97,7 +99,7 @@ def restore_data(config):
     )
     proj_root = os.path.dirname(data_root)
     archive_name = data_cfg.get('archive_name', 'dataset_5fold')
-    zip_path = os.path.join(proj_root, f'{archive_name}.zip')
+    zip_path = os.path.join(archive_dir or proj_root, f'{archive_name}.zip')
     print('zip 존재:', os.path.exists(zip_path))
 
     local_zip = (
