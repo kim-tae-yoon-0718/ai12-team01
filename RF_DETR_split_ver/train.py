@@ -1,5 +1,8 @@
 # rf-detr/train.py
-"""RF-DETR 5-fold 학습 루프. 원본 rfdetr_train_5fold_colab.py의 [3] 블록을 함수로 분리한 것."""
+"""
+RF-DETR 5-fold 학습 루프. 
+원본 rfdetr_train_5fold_colab.py의 [3] 블록을 함수로 분리하였습니다.
+"""
 import os
 import shutil
 
@@ -7,6 +10,8 @@ import yaml
 import torch
 
 from model import get_rfdetr_model
+from dataset import load_label_map
+from utils import read_metrics_csv, plot_history, report_fold_result
 
 
 def load_config(path):
@@ -72,29 +77,48 @@ def train_fold(fold_idx, dataset_dir, model_variant, model_tag, train_cfg,
         dst = None
         print(f'[fold {fold_idx}] checkpoint_best_total.pth 없음 — 백업 실패')
 
+    metrics_csv = os.path.join(out, 'metrics.csv')
+    if os.path.exists(metrics_csv):
+        history = read_metrics_csv(out)
+        plot_history(history, title=f'{model_tag} - Fold {fold_idx}',
+                     save_path=os.path.join(backup_dir, f'{exp}_history.png'))
+    else:
+        print(f'[fold {fold_idx}] metrics.csv 없음 — 학습 곡선 생략')
+
     del model
     torch.cuda.empty_cache()
-    print(f'[fold {fold_idx}] 완료')
     return dst
 
 
 def run_kfold(config, max_folds=None):
     """
-    config에 정의된 n_splits만큼 fold를 순회하며 train_fold를 실행합니다.
+    config에 정의된 n_splits만큼 fold를 순회하며 train_fold를 실행하고,
+    fold마다 report_fold_result()(mAP 계산 + 오답 시각화)를 자동으로 돌립니다.
+
+    fold별 요약(utils.summarize_kfold_results)과 클래스별 집계(utils.summarize_per_class)는
+    이 함수가 자동으로 호출하지 않습니다. 학습이 끝난 뒤 반환값의 'fold_metrics'/
+    'label_to_category_id'를 가지고 별도 셀에서 원하는 시점에 호출하세요
+    (재학습 없이 리포팅만 다시 보고 싶을 때도 그대로 재사용 가능).
 
     Args:
         config (dict): load_config()의 반환값
         max_folds (int): 실행할 최대 fold 수 (None이면 전체, sanity check용)
 
     Returns:
-        list: fold별 백업 체크포인트 경로 (길이 = 실행한 fold 수)
+        dict: {
+            'checkpoints': fold별 백업 체크포인트 경로 리스트,
+            'fold_metrics': fold별 evaluate_from_data() 결과 리스트 (summarize_* 입력용),
+            'label_to_category_id': 모델 라벨 -> 원본 category_id 매핑,
+        }
     """
     print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')
 
     data_cfg = config['data']
     n_folds = max_folds if max_folds is not None else data_cfg['n_splits']
+    label_to_category_id = load_label_map(data_cfg['dataset_dir'])['label2cat']
 
     results = []
+    fold_metrics = []
     for fi in range(n_folds):
         dst = train_fold(
             fold_idx=fi,
@@ -107,8 +131,28 @@ def run_kfold(config, max_folds=None):
         )
         results.append(dst)
 
+        if dst is None:
+            print(f'[fold {fi}] 체크포인트 없음 — 리포팅 생략')
+            continue
+
+        vis_dir = os.path.join(config['output']['backup_dir'], f"{config['model']['tag']}_fold{fi}_errors")
+        metrics = report_fold_result(
+            fold_idx=fi,
+            checkpoint_path=dst,
+            model_variant=config['model']['variant'],
+            dataset_dir=data_cfg['dataset_dir'],
+            label_to_category_id=label_to_category_id,
+            vis_dir=vis_dir,
+        )
+        fold_metrics.append(metrics)
+        print(f"[fold {fi}] 완료 | Best mAP@0.75:0.95: {metrics['map_75_95']:.4f}")
+
     print(f'\n▶ {n_folds}폴드 학습 완료')
-    return results
+    return {
+        'checkpoints': results,
+        'fold_metrics': fold_metrics,
+        'label_to_category_id': label_to_category_id,
+    }
 
 
 if __name__ == '__main__':

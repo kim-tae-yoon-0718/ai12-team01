@@ -261,6 +261,38 @@ def save_label_map(cat2label, label2cat, output_dir):
     return path
 
 
+def load_label_map(output_dir):
+    """save_label_map()이 저장한 label_map.json을 읽어옵니다 (정수 키로 역직렬화)."""
+    path = os.path.join(output_dir, 'label_map.json')
+    with open(path, 'r', encoding='utf-8') as f:
+        label_map = json.load(f)
+    return {
+        'cat2label': {int(k): v for k, v in label_map['cat2label'].items()},
+        'label2cat': {int(k): v for k, v in label_map['label2cat'].items()},
+    }
+
+
+def compute_label_counts(dataset_dir):
+    """
+    fold0의 train+valid annotation을 합쳐 전체 데이터의 클래스별(label) 등장 횟수를 셉니다.
+    (k-fold 분할 특성상 한 fold의 train+valid = 전체 데이터이므로 fold0만 읽어도 충분함)
+
+    Args:
+        dataset_dir (str): fold 디렉토리들의 루트 (build_fold_dataset()의 output_dir)
+
+    Returns:
+        dict: {label: count} (label은 build_coco()가 쓴 cat2label 기준 1~N)
+    """
+    label_counts = defaultdict(int)
+    for split in ('train', 'valid'):
+        ann_path = os.path.join(dataset_dir, 'fold0', split, '_annotations.coco.json')
+        with open(ann_path, 'r', encoding='utf-8') as f:
+            coco = json.load(f)
+        for ann in coco['annotations']:
+            label_counts[ann['category_id']] += 1
+    return dict(label_counts)
+
+
 def archive_dataset(output_dir, archive_base_path):
     """
     output_dir 전체를 zip으로 묶습니다.
