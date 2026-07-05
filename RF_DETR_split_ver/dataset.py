@@ -58,8 +58,11 @@ def load_raw_annotations(train_ann_dir):
         boxes_by_image (dict): file_name -> [bbox, ...]
         cats_by_image (dict): file_name -> [category_id, ...]
         img_meta (dict): file_name -> (width, height)
+        ids_by_image (dict): file_name -> [annotation_id, ...] (원본 데이터셋의 annotation id.
+            corrections.json의 fix_category가 특정 annotation을 정확히 지목하는 데 씁니다.)
     """
-    boxes_by_image, cats_by_image, img_meta = defaultdict(list), defaultdict(list), {}
+    boxes_by_image, cats_by_image, ids_by_image, img_meta = (
+        defaultdict(list), defaultdict(list), defaultdict(list), {})
     for p in glob.glob(os.path.join(train_ann_dir, '**', '*.json'), recursive=True):
         with open(p, encoding='utf-8') as f:
             d = json.load(f)
@@ -69,17 +72,20 @@ def load_raw_annotations(train_ann_dir):
         for a in d['annotations']:
             boxes_by_image[fn].append(a['bbox'])
             cats_by_image[fn].append(a['category_id'])
-    return boxes_by_image, cats_by_image, img_meta
+            ids_by_image[fn].append(a['id'])
+    return boxes_by_image, cats_by_image, img_meta, ids_by_image
 
 
-def apply_corrections(boxes_by_image, cats_by_image, corrections_path):
+def apply_corrections(boxes_by_image, cats_by_image, ids_by_image, corrections_path):
     """
-    corrections.json을 coord_fix -> remove_boxes -> modify_boxes -> add_boxes 순서로 적용합니다.
-    boxes_by_image/cats_by_image를 제자리(in-place)에서 수정하고 그대로 반환합니다.
+    corrections.json을 coord_fix -> remove_boxes -> modify_boxes -> add_boxes -> fix_category 순서로 적용합니다. boxes_by_image/cats_by_image/ids_by_image를 제자리(in-place)에서 수정하고 그대로 반환합니다.
+
+    fix_category를 가장 마지막에 적용하는 이유: remove_boxes/modify_boxes는 category_id로 매칭하는데, 그 category_id는 "원본(잘못 기재된 값 포함)" 기준으로 작성돼 있으므로 category_id 자체를 먼저 고쳐버리면 그 매칭이 깨집니다.
 
     Args:
         boxes_by_image (dict): load_raw_annotations()의 반환값
         cats_by_image (dict): load_raw_annotations()의 반환값
+        ids_by_image (dict): load_raw_annotations()의 반환값 (fix_category 매칭용)
         corrections_path (str): corrections.json 경로
 
     Returns:
@@ -96,17 +102,18 @@ def apply_corrections(boxes_by_image, cats_by_image, corrections_path):
                 if b == original:
                     boxes_by_image[fn][i] = corrected
 
-    # 2) 중복/오류 박스 제거 (항목당 첫 매치 1개만)
+    # 2) 중복/오류 박스 제거 (항목당 첫 매치 1개만) - ids_by_image도 같이 동기화
     for fn, removals in corr.get('remove_boxes', {}).items():
         for rm in removals:
-            kept_boxes, kept_cats, done = [], [], False
-            for c, b in zip(cats_by_image[fn], boxes_by_image[fn]):
+            kept_boxes, kept_cats, kept_ids, done = [], [], [], False
+            for c, b, aid in zip(cats_by_image[fn], boxes_by_image[fn], ids_by_image[fn]):
                 if (not done) and c == rm['category_id'] and b == rm['bbox']:
                     done = True
                     continue
                 kept_boxes.append(b)
                 kept_cats.append(c)
-            boxes_by_image[fn], cats_by_image[fn] = kept_boxes, kept_cats
+                kept_ids.append(aid)
+            boxes_by_image[fn], cats_by_image[fn], ids_by_image[fn] = kept_boxes, kept_cats, kept_ids
 
     # 3) 좌표 수정 (category_id [+ match_bbox] 매치, 첫 매치만 수정)
     for fn, mods in corr.get('modify_boxes', {}).items():
@@ -122,11 +129,25 @@ def apply_corrections(boxes_by_image, cats_by_image, corrections_path):
                         boxes_by_image[fn][i] = new
                     break
 
-    # 4) 누락 박스 추가
+    # 4) 누락 박스 추가 (원본에 없던 박스라 ids_by_image엔 None으로 채움)
     for fn, adds in corr.get('add_boxes', {}).items():
         for add in adds:
             cats_by_image[fn].append(add['category_id'])
             boxes_by_image[fn].append(add['bbox'])
+            ids_by_image[fn].append(None)
+
+    # 5) category_id 오기재 수정 (원본 annotation_id로 정확히 매칭)
+    fix_category = corr.get('fix_category', {})
+    if fix_category:
+        id_to_target = {int(k): v for k, v in fix_category.items()}
+        remaining = set(id_to_target)
+        for fn, ids in ids_by_image.items():
+            for i, aid in enumerate(ids):
+                if aid in id_to_target:
+                    cats_by_image[fn][i] = id_to_target[aid]
+                    remaining.discard(aid)
+        if remaining:
+            print(f'fix_category: annotation_id {sorted(remaining)}를 원본에서 못 찾음 (확인 필요)')
 
     return boxes_by_image, cats_by_image
 
@@ -295,8 +316,9 @@ def build_fold_dataset(data_root, output_dir, corrections_path, cache_dir,
     train_img_dir = os.path.join(data_root, 'train_images')
     train_ann_dir = os.path.join(data_root, 'train_annotations')
 
-    boxes_by_image, cats_by_image, img_meta = load_raw_annotations(train_ann_dir)
-    boxes_by_image, cats_by_image = apply_corrections(boxes_by_image, cats_by_image, corrections_path)
+    boxes_by_image, cats_by_image, img_meta, ids_by_image = load_raw_annotations(train_ann_dir)
+    boxes_by_image, cats_by_image = apply_corrections(
+        boxes_by_image, cats_by_image, ids_by_image, corrections_path)
 
     file_names = sorted(boxes_by_image.keys())
     print('이미지', len(file_names), '/ 박스', sum(len(v) for v in boxes_by_image.values()))
