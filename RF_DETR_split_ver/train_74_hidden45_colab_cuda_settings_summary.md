@@ -19,8 +19,10 @@ Last updated: 2026-07-06
 Note: the archive folder URL is the source of truth. The mounted path
 `/content/drive/MyDrive/ai12-level1-project/dataset_74_hidden45_latest_20260706`
 exists only when that Drive folder is visible in My Drive, for example through a
-shortcut. If it is not mounted, the notebook scans `/content/drive` and then
-downloads the archive directly by file ID with `gdown`.
+shortcut. If it is not mounted, the notebook now skips slow recursive
+`/content/drive` scans by default and downloads the archive directly by file ID
+with `gdown`. Set `SCAN_MOUNTED_DRIVE_FOR_ARCHIVE = True` only if you explicitly
+want to search mounted Drive folders first.
 
 ## Model
 
