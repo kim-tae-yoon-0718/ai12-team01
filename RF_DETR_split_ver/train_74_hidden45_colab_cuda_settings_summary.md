@@ -16,6 +16,12 @@ Last updated: 2026-07-06
 - Extracted dataset path in Colab: `/content/rfdetr_colab/datasets/rfdetr_dataset_74_hidden45_canvas_balanced`
 - Test images folder URL: `https://drive.google.com/drive/folders/1ZdGRPB3Xg4-1QKrKKKzzBOy7d2gorfuw`
 
+Note: the archive folder URL is the source of truth. The mounted path
+`/content/drive/MyDrive/ai12-level1-project/dataset_74_hidden45_latest_20260706`
+exists only when that Drive folder is visible in My Drive, for example through a
+shortcut. If it is not mounted, the notebook scans `/content/drive` and then
+downloads the archive directly by file ID with `gdown`.
+
 ## Model
 
 - RF-DETR variant: `nano`
