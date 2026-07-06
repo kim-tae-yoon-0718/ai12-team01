@@ -1,0 +1,98 @@
+# RF-DETR config for the 74-class canvas-balanced dataset:
+# cleaned 74-class data with group-balanced validation and train crop-to-canvas scale matching.
+
+data:
+  # Output from tools/build_canvas_balanced_74_dataset.py. Must contain train/valid/test dirs.
+  dataset_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/rfdetr_dataset_74_hidden45_canvas_balanced
+  # Source merged COCO dataset made by detectionproject tooling.
+  base56_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/aihub_prepared/train_56_45_merged_coco
+  # Hidden N57-N74 crop export. Crop training avoids unlabeled neighboring pills.
+  hidden18_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/aihub_prepared/hidden_train_import
+  # Original downloaded competition test images. Used for inference-only test split.
+  test_images_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/sprint_ai_project1_data/test_images
+
+model:
+  # Active model: RF-DETR Nano. Change variant to small/medium/base/large for larger models.
+  # tag controls the output folder name under output.local_output_dir.
+  variant: nano          # nano | small | medium | base | large
+  tag: nano_74_hidden45_canvas_balanced_mps
+
+train:
+  # Local MPS baseline. Keep core run controls here so notebook and CLI runs match.
+  # Normal runs should change these values here, not inside notebook cells.
+  epochs: 12
+  batch_size: 1          # micro-batch size; kept small for MPS memory stability
+  grad_accum_steps: 16   # effective batch size 16 on a single MPS device
+  seed: 42               # RF-DETR calls seed_everything(seed, workers=True) at fit start
+
+  # Optimizer/scheduler. RF-DETR builds AdamW internally with these LR/decay values.
+  lr: 0.0001
+  lr_encoder: 0.00015
+  weight_decay: 0.0001
+  lr_scheduler: cosine
+  warmup_epochs: 1.0
+  lr_min_factor: 0.05
+
+  # Resume/checkpoint policy.
+  # checkpoint_interval=1 writes checkpoint_N.ckpt after every epoch; these .ckpt files
+  # contain optimizer/scheduler/epoch state and are the right files for interrupted training.
+  # auto_resume is a local wrapper option, not an RF-DETR native option: when true and
+  # resume is null, train_45fill.py picks the newest checkpoint_N.ckpt from output_dir.
+  # Set resume to a concrete .ckpt path to force a specific checkpoint, or set
+  # auto_resume=false and use a new model.tag/clean output_dir for a fresh run.
+  checkpoint_interval: 1
+  auto_resume: true      # wrapper option: if resume is null, use latest checkpoint_N.ckpt in output_dir
+  resume: null           # set an explicit .ckpt path here to override auto-resume
+
+  # Validation policy.
+  # eval_interval=1 evaluates valid/_annotations.coco.json every epoch and writes metrics.csv.
+  # eval_max_dets=100 matches the RT-DETR/COCOeval maxDets=100 convention used for comparison.
+  # The wrapper also reads metrics.csv after training and copies the best val/mAP_75 epoch
+  # checkpoint to checkpoint_best_map75.ckpt and {model_tag}_best_map75.ckpt.
+  # If training was already started before the wrapper change, run:
+  #   python train_74_hidden45.py --config config_74_hidden45.yaml --finalize-only
+  # to refresh best_total and best_map75 files without retraining.
+  eval_interval: 1
+  early_stopping: true
+  early_stopping_patience: 10
+  early_stopping_min_delta: 0.001
+  early_stopping_use_ema: true
+  use_ema: true
+  tensorboard: true
+  progress_bar: tqdm
+  log_per_class_metrics: true
+  run_test: false        # original test split has no public annotations
+  compute_val_loss: true
+  compute_test_loss: false
+  eval_max_dets: 100     # match RT-DETR/COCOeval maxDets=100 metric convention
+  # MPS/DataLoader tuning. pin_memory is CUDA-only, so keep it off for local Mac.
+  num_workers: 2
+  persistent_workers: true
+  prefetch_factor: 2
+  pin_memory: false
+  amp_dtype: auto
+  multi_scale: false     # more predictable local MPS memory/speed
+  expanded_scales: false
+  # Light augmentation only. Avoid flips because mirrored imprints are unrealistic.
+  # Affine keeps the 384 canvas size while varying pill size, position, rotation, and bbox coordinates.
+  # This should not increase checkpoint size; it only adds small CPU preprocessing cost during training.
+  aug_config:
+    RandomBrightnessContrast:
+      brightness_limit: 0.08
+      contrast_limit: 0.08
+      p: 0.25
+    Affine:
+      scale: [0.85, 1.50]
+      keep_ratio: true
+      translate_percent: [-0.04, 0.04]
+      rotate: [-12, 12]
+      shear: 0
+      border_mode: 4     # cv2.BORDER_REFLECT_101 avoids artificial black margins
+      p: 0.30
+  augmentation_backend: cpu
+  resolution: 384        # RF-DETR-N native resolution
+  device: mps            # cuda | mps | cpu
+
+output:
+  local_output_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/rfdetr_outputs
+  backup_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/rfdetr_outputs/best
