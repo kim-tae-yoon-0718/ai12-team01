@@ -82,7 +82,7 @@ python train_45fill.py --config config_45fill.yaml
 테스트셋 검수에서 정리한 hidden N57-N74 18종은 AIHub 조합 원본을 crop으로 뽑은 export를 사용합니다. 조합 원본 이미지를 그대로 쓰면 주변 알약 annotation 누락이 배경 학습 노이즈가 될 수 있으므로, 이 브랜치에서는 hidden class를 crop 이미지 + 단일 bbox로 결합합니다.
 
 노트북으로 실행하려면 `RF_DETR_split_ver/train_74_hidden45.ipynb`를 열고 기본 검증 셀을 실행한 뒤, 실제 학습 시 `RUN_FULL_TRAIN = True`로 바꾸면 됩니다. 기본 config는 로컬 Apple Silicon MPS 기준으로 `batch_size=1`, `grad_accum_steps=16`, `num_workers=2`, `pin_memory=false`를 사용합니다.
-현재 기본 모델은 `config_74_hidden45.yaml`의 `model.variant: nano`, 즉 RF-DETR Nano이며, 산출물 태그는 `model.tag: nano_74_hidden45_mps`입니다.
+현재 기본 모델은 `config_74_hidden45.yaml`의 `model.variant: nano`, 즉 RF-DETR Nano이며, 산출물 태그는 `model.tag: nano_74_hidden45_v2_mps`입니다.
 
 ```bash
 cd RF_DETR_split_ver
@@ -97,6 +97,7 @@ python train_74_hidden45.py --config config_74_hidden45.yaml --dry-run
 python train_74_hidden45.py --config config_74_hidden45.yaml
 ```
 
+- hidden N57-N74 source crop export는 클래스당 45장으로 제한합니다. 원본 N01-N56 annotation은 그대로 둡니다. 예전 `nano_74_hidden45_mps` 산출물은 hidden 100장 기준으로 학습된 것이므로 새 v2 데이터셋과 자동 resume로 섞지 마세요.
 - `prepare_74_hidden45_dataset.py`는 COCO `category_id`를 프로젝트 제출/평가 기준인 K-code 숫자로 둡니다. 예: `K-001900 -> 1900`.
 - `test` split은 기본적으로 다운로드한 원본 테스트 이미지 폴더를 그대로 사용합니다. test annotation은 비공개이므로 `_annotations.coco.json`의 `annotations`는 빈 배열입니다.
 - RF-DETR은 custom COCO dataset을 읽을 때 sparse K-code id를 내부 0-based label로 remap합니다. 출력 dataset의 `category_mapping.csv`에서 K-code, 내부 label, N번호, 약품명, 각인, hidden 후보 상태를 함께 확인할 수 있습니다.

@@ -1,0 +1,67 @@
+data:
+  dataset_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/rfdetr_dataset_74_hidden45_canvas_balanced_5fold_cls0_mps/fold2
+  base56_dir: ''
+  hidden18_dir: ''
+  test_images_dir: ''
+model:
+  variant: large
+  tag: large_74_hidden45_canvas_balanced_5fold_cls0_local_mps_rfdetr_v18plus_aug_scale150_rot90_v1_p02
+train:
+  epochs: 100
+  batch_size: 1
+  grad_accum_steps: 16
+  seed: 44
+  lr: 0.0001
+  lr_encoder: 0.00015
+  weight_decay: 0.0001
+  lr_scheduler: cosine
+  warmup_epochs: 1.0
+  lr_min_factor: 0.05
+  checkpoint_interval: 1
+  auto_resume: true
+  resume: null
+  eval_interval: 1
+  early_stopping: true
+  early_stopping_patience: 1
+  early_stopping_min_delta: 0.001
+  early_stopping_use_ema: true
+  use_ema: true
+  tensorboard: true
+  progress_bar: tqdm
+  log_per_class_metrics: true
+  run_test: false
+  compute_val_loss: true
+  compute_test_loss: false
+  eval_max_dets: 100
+  num_workers: 2
+  persistent_workers: true
+  prefetch_factor: 2
+  pin_memory: false
+  amp_dtype: auto
+  multi_scale: false
+  expanded_scales: false
+  aug_config:
+    RandomBrightnessContrast:
+      brightness_limit: 0.08
+      contrast_limit: 0.08
+      p: 0.25
+    Affine:
+      scale:
+      - 0.85
+      - 1.5
+      keep_ratio: true
+      translate_percent:
+      - -0.04
+      - 0.04
+      rotate:
+      - -90.0
+      - 90.0
+      shear: 0
+      border_mode: 4
+      p: 0.35
+  augmentation_backend: cpu
+  resolution: 384
+  device: mps
+output:
+  local_output_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/rfdetr_outputs/mps_large_v18_5fold
+  backup_dir: /Users/pio/Documents/AIENGINEERCOURSE/detectionproject/working/rfdetr_outputs/mps_large_v18_5fold/best

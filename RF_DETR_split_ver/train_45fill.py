@@ -306,6 +306,7 @@ def train_once(config: dict[str, Any], epochs_override: int | None = None, dry_r
     backup_dir = Path(output_cfg["backup_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
     backup_dir.mkdir(parents=True, exist_ok=True)
+    fold_label = dataset_dir.name if dataset_dir.name.startswith("fold") else "single"
 
     resume_summary = apply_auto_resume(train_cfg, output_dir)
     train_kwargs = compact_train_kwargs(train_cfg)
@@ -326,6 +327,16 @@ def train_once(config: dict[str, Any], epochs_override: int | None = None, dry_r
     }
     summary_path = output_dir / "run_summary.json"
     summary_path.write_text(json.dumps(run_summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(
+        "\n"
+        f"===== AI12 RF-DETR TRAIN START | {fold_label} | tag={tag} =====\n"
+        f"dataset_dir: {dataset_dir}\n"
+        f"output_dir: {output_dir}\n"
+        f"device: {train_kwargs.get('device')} | epochs: {train_kwargs.get('epochs')}"
+        "\n"
+        "============================================================",
+        flush=True,
+    )
     print(json.dumps(run_summary, ensure_ascii=False, indent=2))
 
     if dry_run:
@@ -343,6 +354,7 @@ def train_once(config: dict[str, Any], epochs_override: int | None = None, dry_r
     run_summary.update(save_map75_checkpoint(output_dir, backup_dir, tag))
 
     summary_path.write_text(json.dumps(run_summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"===== AI12 RF-DETR TRAIN DONE | {fold_label} | tag={tag} =====", flush=True)
     return run_summary
 
 
