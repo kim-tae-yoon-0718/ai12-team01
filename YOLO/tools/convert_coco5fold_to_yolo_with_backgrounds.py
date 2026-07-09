@@ -22,10 +22,12 @@ from typing import Any
 from PIL import Image, ImageEnhance, ImageOps
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE = PROJECT_ROOT / "working/rfdetr_dataset_74_hidden45_canvas_balanced_5fold_cls0_mps"
-DEFAULT_BACKGROUNDS = PROJECT_ROOT / "working/backgrounds/drive_1cbHdfMYasujFtEhs5OGbPr17rtgjaOfE"
-DEFAULT_OUTPUT = PROJECT_ROOT / "working/yolo_74_5fold_bg_mps"
+YOLO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = YOLO_ROOT.parent
+DATA_ROOT = Path(os.environ.get("DATA_ROOT", os.environ.get("PROJECT_ROOT", REPO_ROOT))).resolve()
+DEFAULT_SOURCE = DATA_ROOT / "working/rfdetr_dataset_74_hidden45_canvas_balanced_5fold_cls0_mps"
+DEFAULT_BACKGROUNDS = DATA_ROOT / "working/backgrounds/drive_1cbHdfMYasujFtEhs5OGbPr17rtgjaOfE"
+DEFAULT_OUTPUT = DATA_ROOT / "working/yolo_74_5fold_bg_mps"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
@@ -362,7 +364,7 @@ as images with empty label files, not as category-0 boxes.
 Run example:
 
 ```bash
-python tools/convert_coco5fold_to_yolo_with_backgrounds.py
+python YOLO/tools/convert_coco5fold_to_yolo_with_backgrounds.py
 ```
 
 Per-fold YAML files:

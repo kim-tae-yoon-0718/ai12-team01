@@ -13,16 +13,18 @@ from typing import Any
 import yaml
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RFDETR_REPO = Path(os.environ.get("RFDETR_REPO", PROJECT_ROOT.parent / "ai12-team01-rfdetr"))
+YOLO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = YOLO_ROOT.parent
+DATA_ROOT = Path(os.environ.get("DATA_ROOT", os.environ.get("PROJECT_ROOT", REPO_ROOT))).resolve()
+DEFAULT_RFDETR_REPO = Path(os.environ.get("RFDETR_REPO", REPO_ROOT.parent / "ai12-team01-rfdetr"))
 DEFAULT_RFDETR_CONFIG = (
     DEFAULT_RFDETR_REPO
     / "RF_DETR_split_ver"
     / "config_74_hidden45_mps_rfdetr_large_v18_5fold_p00.yaml"
 )
-DEFAULT_RFDETR_FOLDS = PROJECT_ROOT / "working/rfdetr_dataset_74_hidden45_canvas_balanced_5fold_cls0_mps"
-DEFAULT_YOLO_DATASET = PROJECT_ROOT / "working/yolo_74_5fold_bg_mps"
-DEFAULT_OUTPUT = PROJECT_ROOT / "working/reports/yolo_rfdetr_param_audit_20260709"
+DEFAULT_RFDETR_FOLDS = DATA_ROOT / "working/rfdetr_dataset_74_hidden45_canvas_balanced_5fold_cls0_mps"
+DEFAULT_YOLO_DATASET = DATA_ROOT / "working/yolo_74_5fold_bg_mps"
+DEFAULT_OUTPUT = DATA_ROOT / "working/reports/yolo_rfdetr_param_audit_20260709"
 
 
 def parse_args() -> argparse.Namespace:

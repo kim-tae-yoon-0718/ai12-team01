@@ -14,14 +14,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DATASET = PROJECT_ROOT / "working/yolo_74_5fold_bg_mps"
-DEFAULT_OUTPUT = PROJECT_ROOT / "working/yolo_outputs/yolo11m_74_5fold_bg_mps_10ep"
+YOLO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = YOLO_ROOT.parent
+DATA_ROOT = Path(os.environ.get("DATA_ROOT", os.environ.get("PROJECT_ROOT", REPO_ROOT))).resolve()
+DEFAULT_DATASET = DATA_ROOT / "working/yolo_74_5fold_bg_mps"
+DEFAULT_OUTPUT = DATA_ROOT / "working/yolo_outputs/yolo11m_74_5fold_bg_mps_10ep"
 
 
 def parse_args() -> argparse.Namespace:
