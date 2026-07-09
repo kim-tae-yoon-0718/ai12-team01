@@ -216,3 +216,39 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local data and generated ML artifacts
+.DS_Store
+.env
+.env.*
+!.env.example
+kaggle.json
+sprint_ai_project1_data/
+working/
+data/
+dataset/
+datasets/
+ai12-level1-project.zip
+*.pth
+*.pt
+*.onnx
+*.engine
+*.ckpt
+*.safetensors
+*.bin
+*.pdparams
+runs/
+output/
+outputs/
+checkpoints/
+wandb/
+lightning_logs/
+summary/
+events.out.tfevents*
+submission.csv
+submission*.csv
+submissions/
+*.zip
+*.tar
+*.tar.gz
+*.tgz

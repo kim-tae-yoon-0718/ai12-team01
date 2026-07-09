@@ -1,0 +1,7 @@
+# YOLO11m/OHEM pilot dependencies.
+# Install into your active notebook/training environment with:
+#   python -m pip install -r requirements-yolo.txt
+ultralytics
+PyYAML
+pandas
+pillow
