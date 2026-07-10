@@ -1,0 +1,28 @@
+{
+  "metric": "mAP@0.75:0.95",
+  "score": 0.7845444927669333,
+  "submission": "working/submissions/yolo11m_5fold_map75_95_100ep_local_20260711/submission_yolo11m_5fold_map75_95_wbf.csv",
+  "ground_truth": "working/gt_scoring/ground_truth/test_ground_truth.csv",
+  "unknown_ignore_boxes": "working/test_annotations/test_unknown_ignore_boxes.csv",
+  "submission_sha256": "f3ee3712340ac16a08ce6b1096bc8a5ee7c8b5889044d78c4a5b2f951937edb9",
+  "ground_truth_sha256": "7c3c7c5d08415bc04c9d19c364e49e3f2a0b12dbb44ee01aa1ff844e7d4dafa3",
+  "out_dir": "working/gt_scoring/results/yolo11m_local_100ep_5fold",
+  "image_filter": "all",
+  "iou_thresholds": [
+    0.75,
+    0.8,
+    0.85,
+    0.9,
+    0.95
+  ],
+  "ignore_iou_threshold": 0.5,
+  "disable_unknown_ignore": false,
+  "images": 842,
+  "gt_boxes": 3229,
+  "prediction_boxes_raw": 4085,
+  "prediction_boxes_scored": 4002,
+  "ignored_unknown_overlap_predictions": 83,
+  "unknown_ignore_boxes_used": 82,
+  "classes_in_gt": 74,
+  "classes_in_predictions": 74
+}

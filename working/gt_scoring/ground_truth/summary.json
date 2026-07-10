@@ -1,0 +1,24 @@
+{
+  "designation": "class-reviewed test ground truth",
+  "status": "canonical local GT",
+  "official_competition_gt": false,
+  "basis": "HI99 deduplicated 3229-box reference corrected by RF-DETR Large position comparison and manual visual review",
+  "rows": 3229,
+  "images": 842,
+  "categories": 74,
+  "bbox_changes": 0,
+  "class_corrections": 67,
+  "hidden_class_counts": {
+    "N72": 27,
+    "N73": 30,
+    "N74": 8
+  },
+  "source_provenance": "HI99 dedup plus RF-DETR Large comparison and manual visual review",
+  "files": {
+    "csv": "test_ground_truth.csv",
+    "coco_json": "test_ground_truth.coco.json",
+    "corrections": "all_class_correction_manifest_67.csv",
+    "manual_review": "manual_review_reconciliation.csv",
+    "class_map": "pill_class_number_map_74.csv"
+  }
+}

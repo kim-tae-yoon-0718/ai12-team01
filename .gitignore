@@ -224,7 +224,7 @@ __marimo__/
 !.env.example
 kaggle.json
 sprint_ai_project1_data/
-working/
+working/*
 data/
 dataset/
 datasets/
@@ -252,3 +252,9 @@ submissions/
 *.tar
 *.tar.gz
 *.tgz
+
+# Versioned class-reviewed GT and local scoring toolkit
+!working/gt_scoring/
+!working/gt_scoring/**
+working/gt_scoring/**/__pycache__/
+working/gt_scoring/**/*.py[cod]

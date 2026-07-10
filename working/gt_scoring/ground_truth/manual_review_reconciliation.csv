@@ -1,0 +1,8 @@
+source_annotation_id,image_id,source_action,source_category_id,final_matched_annotation_id,final_category_id,match_iou,status,reason
+927,443,drop,3832,924,4378,0.939374,class_corrected,"N07 prediction is TYLENOL, not N07; hidden/non-56 class, drop"
+704,332,drop,4543,703,12420,0.922522,class_corrected,"N08 prediction is LILLY, not Airtal; hidden/non-56 class, drop"
+2847,1298,drop,4543,2845,12420,0.963746,class_corrected,"N08 prediction is LILLY, not Airtal; hidden/non-56 class, drop"
+2031,941,drop,18147,2028,18147,0.497077,duplicate_absent_from_dedup_gt,"N19 duplicate/incorrect partial prediction in img941, drop"
+2110,979,relabel,22074,2108,16232,0.940609,class_corrected,N30 Lipilou img979 has imprint 20 matching N14 Lipitor
+2113,980,relabel,22074,2111,16232,0.959827,class_corrected,N30 Lipilou img980 has imprint 20 matching N14 Lipitor
+2401,1096,relabel,35206,2397,27993,0.948121,already_correct_n40,"N53 Atozet img1096 has imprint ZLT-100, should be N40 Zoloft"
