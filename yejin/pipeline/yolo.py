@@ -226,6 +226,63 @@ def run_folds_yolo(config, fold_yaml_paths, fold_indices=None, max_folds=None):
     return {'checkpoints': checkpoints, 'fold_metrics': fold_metrics}
 
 
+def summarize_kfold_results_yolo(fold_metrics, tag):
+    """fold별 mAP를 받아 평균±표준편차를 출력합니다 (저장소 summarize_kfold_results의 YOLO 버전).
+
+    Args:
+        fold_metrics (dict or list): report_fold_result_yolo() 결과들
+            ({fold: metrics} dict 또는 리스트 모두 허용)
+        tag (str): 실험 태그 (출력 제목)
+    """
+    vals = list(fold_metrics.values()) if isinstance(fold_metrics, dict) else list(fold_metrics)
+    map_vals = [m['map'] for m in vals]
+    map50_vals = [m['map_50'] for m in vals]
+    map_mean, map_std = float(np.mean(map_vals)), float(np.std(map_vals))
+    map50_mean, map50_std = float(np.mean(map50_vals)), float(np.std(map50_vals))
+    print(f"\n{'='*50}\n{tag} 최종 결과 ({len(vals)}-fold 평균)\n"
+          f"mAP@0.5:0.95: {map_mean:.4f} ± {map_std:.4f}\n"
+          f"mAP@0.5: {map50_mean:.4f} ± {map50_std:.4f}\n{'='*50}")
+    return {'map': (map_mean, map_std), 'map_50': (map50_mean, map50_std)}
+
+
+def summarize_per_class_yolo(fold_metrics, label2cat, label_counts, valid_pivot):
+    """클래스(라벨)별 mAP@0.5:0.95를 fold 평균으로 집계합니다 (summarize_per_class의 YOLO 버전).
+
+    valid_pivot(라벨 x fold의 valid 박스 수)을 이용해, 그 fold의 valid에 해당 라벨 인스턴스가
+    하나도 없었던 경우는 집계에서 제외합니다 (그 fold의 AP가 0으로 나와도 실제 성능이 아니라
+    '평가 대상 없음'이기 때문).
+
+    Args:
+        fold_metrics (dict or list): report_fold_result_yolo() 결과들
+        label2cat (dict): 라벨 -> 원본 category_id
+        label_counts (dict): 라벨별 전체 박스 수 (저장소 compute_label_counts 결과)
+        valid_pivot (pd.DataFrame): folds.summarize_fold_distribution()의 두 번째 반환값
+
+    Returns:
+        pd.DataFrame: mean_AP 내림차순 클래스별 집계표
+    """
+    import pandas as pd
+
+    items = (sorted(fold_metrics.items()) if isinstance(fold_metrics, dict)
+             else list(enumerate(fold_metrics)))
+    rows = []
+    for label in sorted(label2cat):
+        aps = []
+        for fi, m in items:
+            if valid_pivot.loc[label, f'fold{fi}_valid'] == 0:
+                continue
+            aps.append(m['map_per_class'][label - 1])   # class index = label - 1
+        rows.append({
+            'label': label,
+            'category_id': label2cat[label],
+            'total_count': label_counts.get(label, 0),
+            'mean_AP': round(float(np.mean(aps)), 4) if aps else -1,
+            'std_AP': round(float(np.std(aps)), 4) if aps else 0,
+            'valid_folds': len(aps),
+        })
+    return pd.DataFrame(rows).sort_values('mean_AP', ascending=False)
+
+
 def collect_predictions_ensemble_yolo(checkpoints, image_dir, conf_thr=0.05,
                                       extensions=('.png', '.jpg', '.jpeg')):
     """YOLO 체크포인트 리스트로 test 폴더를 추론해 예측을 이미지별로 병합합니다 (합집합).
