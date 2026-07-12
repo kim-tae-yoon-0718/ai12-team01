@@ -278,7 +278,7 @@ def compute_label_counts(dataset_dir):
     (k-fold 분할 특성상 한 fold의 train+valid = 전체 데이터이므로 fold0만 읽어도 충분함)
 
     Args:
-        dataset_dir (str): fold 디렉토리들의 루트 (build_fold_dataset()의 output_dir)
+        dataset_dir (str): fold 디렉토리들의 루트 (write_fold_dirs()의 output_dir)
 
     Returns:
         dict: {label: count} (label은 build_coco()가 쓴 cat2label 기준 1~N)
@@ -292,78 +292,3 @@ def compute_label_counts(dataset_dir):
             label_counts[ann['category_id']] += 1
     return dict(label_counts)
 
-
-def archive_dataset(output_dir, archive_base_path):
-    """
-    output_dir 전체를 zip으로 묶습니다.
-
-    Args:
-        archive_base_path (str): 확장자 없는 경로 (예: '/path/dataset_5fold')
-
-    Returns:
-        str: 생성된 zip 파일의 전체 경로
-    """
-    archive_path = shutil.make_archive(archive_base_path, 'zip', output_dir)
-    print('zip 저장 완료:', archive_path)
-    return archive_path
-
-
-def restore_dataset(zip_path, extract_dir, local_stage_path=None):
-    """
-    dataset_5fold.zip을 extract_dir에 복원합니다.
-
-    Args:
-        zip_path (str): 원본 zip 경로 (드라이브 등)
-        extract_dir (str): 압축을 풀 디렉토리
-        local_stage_path (str): 주어지면 zip을 이 경로로 먼저 복사한 뒤 그 사본을 풂
-                                 (Colab에서 드라이브 반복 read를 줄이기 위한 옵션)
-    """
-    os.makedirs(extract_dir, exist_ok=True)
-    src = zip_path
-    if local_stage_path:
-        shutil.copy(zip_path, local_stage_path)
-        src = local_stage_path
-    shutil.unpack_archive(src, extract_dir, 'zip')
-    print('복원 fold:', sorted(d for d in os.listdir(extract_dir) if d.startswith('fold')))
-
-
-def build_fold_dataset(data_root, output_dir, corrections_path, cache_dir,
-                        n_splits=5, seed=42, archive_base_path=None):
-    """
-    원본 annotation 로드 -> corrections 적용 -> StratifiedGroupKFold 분할
-    -> fold 디렉토리 생성까지 한 번에 수행합니다 (원본 [2-A] 단계 전체에 해당).
-
-    Args:
-        data_root (str): sprint_ai_project1_data 경로
-        output_dir (str): fold 디렉토리를 만들 루트 (예: '/content/dataset')
-        corrections_path (str): corrections.json 경로
-        cache_dir (str): 이미지 로컬 캐시 경로
-        n_splits (int): fold 수
-        seed (int): StratifiedGroupKFold 시드
-        archive_base_path (str): 주어지면 완료 후 zip으로 백업 (확장자 제외 경로)
-
-    Returns:
-        dict: {'cat2label', 'label2cat', 'num_classes', 'archive_path'(옵션)}
-    """
-    train_img_dir = os.path.join(data_root, 'train_images')
-    train_ann_dir = os.path.join(data_root, 'train_annotations')
-
-    boxes_by_image, cats_by_image, img_meta, ids_by_image = load_raw_annotations(train_ann_dir)
-    boxes_by_image, cats_by_image = apply_corrections(
-        boxes_by_image, cats_by_image, ids_by_image, corrections_path)
-
-    file_names = sorted(boxes_by_image.keys())
-    print('이미지', len(file_names), '/ 박스', sum(len(v) for v in boxes_by_image.values()))
-
-    all_cats, cat2label, label2cat = build_category_mapping(cats_by_image)
-    folds = make_folds(file_names, boxes_by_image, cats_by_image, cat2label, n_splits, seed)
-
-    cache_images(train_img_dir, cache_dir)
-    write_fold_dirs(folds, file_names, boxes_by_image, cats_by_image, img_meta,
-                     cat2label, all_cats, cache_dir, output_dir)
-    save_label_map(cat2label, label2cat, output_dir)
-
-    result = {'cat2label': cat2label, 'label2cat': label2cat, 'num_classes': len(cat2label)}
-    if archive_base_path:
-        result['archive_path'] = archive_dataset(output_dir, archive_base_path)
-    return result

@@ -87,7 +87,7 @@ def plot_history(history, title='Training History', save_path=None):
 
 def show_error_gallery(vis_dir, ncols=4, figsize_per_image=4, start=0, limit=None):
     """
-    visualize_errors()/save_ensemble_gallery() 등이 vis_dir에 저장해둔 이미지들을
+    visualize_errors_from_data() 등이 vis_dir에 저장해둔 이미지들을
     한 셀에서 grid(subplot) 형태로 한 번에 확인합니다. (이미지 재계산 없이 저장된 PNG만 읽음)
     이름은 "error"지만 폴더 안 PNG를 grid로 보여주는 범용 함수라 오답 이미지가 아닌
     다른 갤러리(예: 앙상블 예측 결과)에도 그대로 씁니다.
@@ -247,67 +247,3 @@ def summarize_per_class(fold_metrics, label_to_category_id, label_counts):
 
     return pd.DataFrame(rows).sort_values('mean_AP', ascending=False)
 
-
-def summarize_missing_classes(pred_data, label_to_category_id, score_threshold=0.5):
-    """
-    collect_predictions_ensemble()로 모은 test 예측 중 confidence >= score_threshold인
-    것만 모아, label_to_category_id에 등록된 학습 클래스 중 test 전체에서 단 한 번도
-    예측되지 않은 클래스를 찾습니다.
-
-    주의: pred_count=0이라고 그 클래스가 test에 실제로 없다는 확정적 근거는 아닙니다.
-    모델이 전부 놓쳤을 가능성도 있으니, 이 표는 육안 재확인 대상을 추리는 용도로만 쓰세요.
-
-    Args:
-        pred_data: collect_predictions_ensemble()의 반환값
-        label_to_category_id (dict): 모델 라벨 -> 원본 category_id 매핑
-        score_threshold (float): 집계에 포함할 예측의 최소 confidence
-
-    Returns:
-        pd.DataFrame: columns = [label, category_id, pred_count], pred_count 오름차순
-                       (0인 행이 위쪽에 옴 - 육안 재확인 우선순위)
-    """
-    counts = defaultdict(int)
-    for d in pred_data:
-        keep = d['pred_scores'] >= score_threshold
-        for lbl in d['pred_labels'][keep].tolist():
-            counts[lbl] += 1
-
-    rows = [
-        {'label': label, 'category_id': cat_id, 'pred_count': counts.get(label, 0)}
-        for label, cat_id in sorted(label_to_category_id.items())
-    ]
-    return pd.DataFrame(rows).sort_values('pred_count')
-
-
-def save_class_crops(by_label, label_to_category_id, save_dir):
-    """
-    visualize.crop_predictions_by_class()의 결과를 라벨(예측 클래스)별 하위 폴더에
-    저장합니다. save_dir/label{label:02d}_cat{category_id}/ 안에 그 클래스로 예측된
-    crop들이 모이므로, 학습 클래스 대조표(PNG)와 나란히 놓고 클래스별로 훑어보기 좋습니다.
-
-    Args:
-        by_label: visualize.crop_predictions_by_class()의 반환값
-        label_to_category_id (dict): 모델 라벨 -> 원본 category_id 매핑
-        save_dir (str): 저장 루트 폴더
-
-    Returns:
-        dict: {label: 저장된 폴더 경로} (예측이 하나도 없던 라벨은 포함 안 됨)
-    """
-    class_dirs = {}
-    for label, items in sorted(by_label.items()):
-        cat_id = label_to_category_id.get(label, 'unknown')
-        label_dir = os.path.join(save_dir, f'label{label:02d}_cat{cat_id}')
-        os.makedirs(label_dir, exist_ok=True)
-
-        for idx, item in enumerate(items):
-            stem = os.path.splitext(item['file_name'])[0]
-            agree = item.get('agree_count', 1)
-            save_path = os.path.join(
-                label_dir,
-                f'{idx:03d}_{stem}_agree{agree}_fold{item["fold_idx"]}_{item["score"]:.2f}.png')
-            plt.imsave(save_path, item['crop'])
-
-        class_dirs[label] = label_dir
-
-    print(f'{len(class_dirs)}개 클래스 폴더 생성 -> {save_dir}')
-    return class_dirs

@@ -216,23 +216,6 @@ def visualize_errors_from_data(all_data, label_to_category_id, save_dir,
     return error_count
 
 
-def visualize_errors(model, coco_json_path, image_dir, label_to_category_id, save_dir,
-                      score_threshold=0.5, iou_threshold=0.5, file_prefix='error'):
-    """
-    collect_predictions_from_coco() + visualize_errors_from_data()를 한 번에 실행합니다.
-
-    mAP 계산까지 같은 예측 데이터로 처리해서 추론 중복을 피하고 싶다면, 이 래퍼 대신 collect_predictions_from_coco()를 직접 호출해 evaluate_from_data()/
-    visualize_errors_from_data()에 나눠 넘기는 쪽이 더 효율적입니다.
-
-    Returns:
-        int: 저장된 오답 이미지 수
-    """
-    all_data = collect_predictions_from_coco(model, coco_json_path, image_dir, score_threshold=0.0)
-    return visualize_errors_from_data(all_data, label_to_category_id, save_dir,
-                                       score_threshold=score_threshold, iou_threshold=iou_threshold,
-                                       file_prefix=file_prefix)
-
-
 def collect_predictions_ensemble(models, image_dir, score_threshold=0.5,
                                   extensions=('.png', '.jpg', '.jpeg')):
     """
@@ -287,44 +270,6 @@ def collect_predictions_ensemble(models, image_dir, score_threshold=0.5,
         })
 
     return all_data
-
-
-def save_ensemble_gallery(pred_data, label_to_category_id, save_dir, file_prefix='test'):
-    """
-    collect_predictions_ensemble() 결과에 예측 박스(카테고리 id + confidence + 어느 fold가
-    잡았는지)를 그려서 save_dir에 저장합니다. GT가 없어 오답 판정은 하지 않고 예측을 전부
-    그대로 그립니다 - 학습 클래스 대조표(PNG)와 육안으로 비교하기 위한 용도입니다.
-
-    Args:
-        pred_data: collect_predictions_ensemble()의 반환값
-        label_to_category_id (dict): 모델 라벨 -> 원본 category_id 매핑
-        save_dir (str): 저장 폴더
-        file_prefix (str): 저장 파일명 접두어
-
-    Returns:
-        int: 저장된 이미지 수
-    """
-    os.makedirs(save_dir, exist_ok=True)
-
-    for idx, data in enumerate(pred_data):
-        fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-        ax.imshow(data['image'])
-
-        for box, label, score, fold_idx in zip(data['pred_boxes'], data['pred_labels'],
-                                                 data['pred_scores'], data['pred_fold']):
-            _draw_box(ax, box, label.item(), label_to_category_id,
-                      color='red', prefix=f'fold{fold_idx.item()}', score=score.item())
-
-        ax.set_title(data['file_name'], fontsize=9)
-        ax.axis('off')
-
-        stem = os.path.splitext(data['file_name'])[0]
-        save_path = os.path.join(save_dir, f'{file_prefix}_{idx:04d}_{stem}.png')
-        plt.savefig(save_path, bbox_inches='tight', dpi=100)
-        plt.close(fig)
-
-    print(f'Saved {len(pred_data)} images -> {save_dir}')
-    return len(pred_data)
 
 
 def _cluster_same_class_boxes(boxes, labels, scores, folds, iou_threshold):
