@@ -35,6 +35,26 @@ def find_data_root(candidates=None, search_root=None, target_name='sprint_ai_pro
     return data_root
 
 
+def find_input_dir(name, root='/kaggle/input'):
+    """
+    Kaggle Input(root) 아래에서 이름이 name인 디렉토리를 찾아 반환합니다 (여러 개면 첫 번째).
+    competition/dataset 슬러그를 몰라도 폴더 "이름"만으로 찾을 수 있어 find_data_root()의
+    Kaggle용 짝입니다.
+
+    Args:
+        name (str): 찾을 디렉토리 이름 (예: 'train_images', 'task2_synthesized')
+        root (str): 검색 루트 (기본: /kaggle/input)
+
+    Returns:
+        str or None: 찾은 경로 (탐색 실패 시 None - 호출부에서 assert로 점검)
+    """
+    hits = sorted(p for p in glob.glob(os.path.join(root, '**', name), recursive=True)
+                  if os.path.isdir(p))
+    if len(hits) > 1:
+        print(f"'{name}' 후보 {len(hits)}개 -> 첫 번째 사용:\n  " + "\n  ".join(hits))
+    return hits[0] if hits else None
+
+
 def check_data_paths(data_root):
     """train/test 이미지·annotation 하위 경로 존재 여부를 점검합니다."""
     paths = {
