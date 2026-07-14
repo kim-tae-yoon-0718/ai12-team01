@@ -86,5 +86,6 @@ run_kfold(config)
 |---|---|
 | 김태윤 | [바로가기](https://helix-parmesan-073.notion.site/38b9556c39378046af90dcc553987d7b?source=copy_link) |
 | 박예진 | [바로가기](https://steep-bakery-b7e.notion.site/Daily-38bb3367ba1e80f8bc26c4017202da3e?source=copy_link) |
-| 이하람 | [바로가기](https://app.notion.com/p/_-39c6210f8b2680639858c67fb1b756f9?source=copy_link) |
+| 이하람 | [바로가기](https://app.notion.com/p/_-39c6210f8b2680639858c67fb1b756f9) |
 | 박지수 | [바로가기](https://app.notion.com/p/39da5c48c4b180ce9683c328e20e163f) |
+| 서동혁 | [바로가기](https://app.notion.com/p/39b2a432343580248e35fb43f57030cd) |
